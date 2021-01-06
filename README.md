@@ -21,4 +21,4 @@ The output from the previous step must be resampled to a higher resolution using
 python3 src/py/poly_fit.py --img input_2048.jpg --size 512 --label input_labelmap_2048.nrrd --out input_stacked.nrrd
 ```
 
-[Poly fit](./doc/poly_fit.png)
+![Poly fit](./doc/poly_fit.png)
