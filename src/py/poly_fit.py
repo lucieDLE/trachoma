@@ -3,16 +3,16 @@ import numpy as np
 import argparse
 import matplotlib.pyplot as plt
 from utils import *
-
+from matplotlib.colors import ListedColormap
 
 def main(args):
 	img = itk.imread(args.img)
-	label = itk.imread(args.label)
+	seg = itk.imread(args.seg)
 
 	img_np = itk.GetArrayViewFromImage(img)
-	label_np = itk.GetArrayViewFromImage(label)
+	seg_np = itk.GetArrayViewFromImage(seg)
 
-	y, x = np.where(label_np == args.label_num)
+	y, x = np.where(seg_np == args.label_num)
 
 	z = np.polyfit(x, y, 3)
 	poly = np.poly1d(z)
@@ -47,12 +47,14 @@ def main(args):
 	out_stack = np.array(out_stack)
 	out_img = GetImage(out_stack)
 
-	# itk.imwrite(out_img, args.out)
+	itk.imwrite(out_img, args.out)
 
 	plt.imshow(img_np)
-	plt.imshow(label_np, interpolation='nearest', alpha=0.4)
 
-	plt.plot(x_values, y_values)
+	cmap = ListedColormap(["black", "tab:red", "tab:green", "tab:blue"])
+	plt.imshow(seg_np, cmap=cmap, interpolation='nearest', alpha=0.4)
+
+	plt.plot(x_values, y_values, linewidth=2, color="red")
 	plt.plot(x, y)
 	plt.show()
 
@@ -60,7 +62,7 @@ def main(args):
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Predict an input with a trained neural network', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 	parser.add_argument('--img', type=str, help='Input rgb image', required=True)
-	parser.add_argument('--label', type=str, help='Input label image', required=True)
+	parser.add_argument('--seg', type=str, help='Input label image', required=True)
 	parser.add_argument('--label_num', type=int, help='Label number for polyfit', default=3)
 	parser.add_argument('--num_samples', type=int, help='Output number of samples', default=64)
 	parser.add_argument('--size', type=int, help='Output size', default=256)
