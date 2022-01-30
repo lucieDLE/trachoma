@@ -117,5 +117,12 @@ model.set_weights(tf.keras.models.load_model(model_path, custom_objects={'tf': t
 
 model.summary()
 
-model.save("/work/jprieto/data/remote/EGower/jprieto/trained/eyes_cropped_resampled_512_seg_train_random_rot_09072021.hd5")
+model.save("/work/jprieto/data/remote/EGower/jprieto/trained/eyes_cropped_resampled_512_seg_train_random_rot_09072021")
 
+converter = tf.lite.TFLiteConverter.from_keras_model(model)
+tflite_model = converter.convert()
+
+version = 2.0
+
+with open('/work/jprieto/data/remote/EGower/jprieto/trained/segmentation_' + version + '.tflite', 'wb') as f:
+  f.write(tflite_model)

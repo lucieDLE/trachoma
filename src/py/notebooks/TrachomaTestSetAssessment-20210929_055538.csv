@@ -1,0 +1,809 @@
+tt_id,result,weight,ground_truth,runtime_ms,
+15552_11Pre_os_upper_cropped.jpg,TT ," 0.96
+",TT,28.38,1
+15865_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.644,1
+11079_11Pre_os_upper_cropped.jpg,Healthy ," 0.98
+",Healthy,27.898,1
+14719_11Pre_od_upper_cropped.jpg,Healthy ," 0.84
+",TT,27.54,0
+15676_11Pre_os_upper_cropped.jpg,TT ," 0.95
+",TT,28.156,1
+14408_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.298,1
+16022_11Pre_os_upper_cropped.jpg,TT ," 0.98
+",TT,27.905,1
+15562_11Pre_od_upper_cropped.jpg,Healthy ," 0.70
+",TT,27.588,0
+15697_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.777,1
+15909_11Pre_od_upper_cropped.jpg,Healthy ," 0.58
+",TT,27.785,0
+14882_11Pre_od_upper_cropped.jpg,TT ," 0.65
+",TT,27.801,1
+14388_11Pre_od_upper_cropped.jpg,Healthy ," 0.79
+",TT,27.98,0
+15548_11Pre_os_upper_cropped.jpg,TT ," 0.71
+",TT,26.768,1
+15375_11Pre_od_upper_cropped.jpg,TT ," 0.73
+",TT,27.886,1
+15873_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.459,1
+15064_11Pre_od_upper_cropped.jpg,TT ," 0.94
+",TT,27.75,1
+15673_11Pre_od_upper_cropped.jpg,Healthy ," 0.94
+",TT,26.544,0
+15884_11Pre_od_upper_cropped.jpg,TT ," 0.99
+",TT,27.972,1
+1602845669948_cropped.jpg,Healthy ," 1.00
+",Healthy,28.217,1
+16031_11Pre_od_upper_cropped.jpg,Healthy ," 0.92
+",Healthy,28.088,1
+12832_11Pre_od_upper_cropped.jpg,TT ," 0.70
+",Healthy,28.446,0
+14679_11Pre_od_upper_cropped.jpg,Healthy ," 0.78
+",Healthy,27.702,1
+1603268407377_cropped.jpg,Healthy ," 1.00
+",Healthy,27.589,1
+12191_11Pre_od_upper_cropped.jpg,Healthy ," 0.94
+",Healthy,27.979,1
+15382_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",TT,28.471,0
+15306_11Pre_od_upper_cropped.jpg,TT ," 0.98
+",TT,27.618,1
+14745_11Pre_od_upper_cropped.jpg,TT ," 0.55
+",TT,27.935,1
+15511_11Pre_od_upper_cropped.jpg,TT ," 0.92
+",TT,27.497,1
+15750_11Pre_os_upper_cropped.jpg,TT ," 0.90
+",TT,27.708,1
+14281_11Pre_od_upper_cropped.jpg,TT ," 0.81
+",TT,27.915,1
+15776_11Pre_od_upper_cropped.jpg,TT ," 0.97
+",TT,27.398,1
+11814_11Pre_od_upper_cropped.jpg,TT ," 0.70
+",Healthy,27.998,0
+14756_11Pre_os_upper_cropped.jpg,Healthy ," 1.00
+",TT,27.901,0
+14794_11Pre_os_upper_cropped.jpg,TT ," 0.91
+",TT,28.519,1
+15008_11Pre_os_upper_cropped.jpg,Healthy ," 0.78
+",TT,27.99,0
+14447_11Pre_os_upper_cropped.jpg,TT ," 0.76
+",TT,27.545,1
+15333_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,28.719,1
+14625_11Pre_od_upper_cropped.jpg,TT ," 0.83
+",TT,27.985,1
+14464_11Pre_os_upper_cropped.jpg,TT ," 0.93
+",TT,27.415,1
+15310_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,28.016,1
+15471_11Pre_od_upper_cropped.jpg,Healthy ," 0.86
+",TT,27.65,0
+15027_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.889,1
+15616_11Pre_od_upper_cropped.jpg,Healthy ," 0.80
+",TT,27.318,0
+15960_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.52,1
+1603288441877_cropped.jpg,Healthy ," 1.00
+",Healthy,27.89,1
+15788_11Pre_os_upper_cropped.jpg,TT ," 0.54
+",TT,27.927,1
+15755_11Pre_od_upper_cropped.jpg,TT ," 0.61
+",TT,27.434,1
+13734_11Pre_os_upper_cropped.jpg,Healthy ," 0.94
+",Healthy,28.498,1
+14477_11Pre_od_upper_cropped.jpg,TT ," 0.75
+",TT,27.675,1
+14782_11Pre_os_upper_cropped.jpg,Healthy ," 1.00
+",TT,27.625,0
+15486_11Pre_od_upper_cropped.jpg,TT ," 0.97
+",TT,27.603,1
+14330_11Pre_os_upper_cropped.jpg,Healthy ," 0.80
+",TT,27.75,0
+13218_11Pre_od_upper_cropped.jpg,Healthy ," 0.97
+",Healthy,28.707,1
+16079_11Pre_os_upper_cropped.jpg,TT ," 0.99
+",TT,27.638,1
+15033_11Pre_od_upper_cropped.jpg,TT ," 0.99
+",TT,27.363,1
+15752_11Pre_od_upper_cropped.jpg,Healthy ," 0.66
+",TT,27.138,0
+12692_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,27.962,1
+14176_11Pre_od_upper_cropped.jpg,Healthy ," 0.59
+",TT,28.291,0
+15628_11Pre_od_upper_cropped.jpg,Healthy ," 0.74
+",TT,28.268,0
+14817_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,28.094,1
+16075_11Pre_os_upper_cropped.jpg,TT ," 0.61
+",TT,27.701,1
+15476_11Pre_od_upper_cropped.jpg,Healthy ," 0.92
+",TT,27.329,0
+14622_11Pre_od_upper_cropped.jpg,Healthy ," 0.89
+",TT,30.903,0
+15492_11Pre_os_upper_cropped.jpg,TT ," 0.92
+",TT,33.901,1
+15331_11Pre_os_upper_cropped.jpg,Healthy ," 0.86
+",TT,30.612,0
+11279_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,28.376,1
+14466_11Pre_od_upper_cropped.jpg,Healthy ," 0.76
+",TT,27.294,0
+15029_11Pre_od_upper_cropped.jpg,Healthy ," 0.97
+",TT,28.571,0
+13355_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,28.899,1
+14801_11Pre_od_upper_cropped.jpg,Healthy ," 0.98
+",Healthy,27.855,1
+15995_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,28.518,1
+14023_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",TT,34.514,0
+15621_11Pre_os_upper_cropped.jpg,TT ," 0.92
+",TT,30.597,1
+15488_11Pre_os_upper_cropped.jpg,Healthy ," 0.66
+",TT,28.029,0
+15010_11Pre_od_upper_cropped.jpg,TT ," 0.97
+",TT,27.83,1
+1602928385813_cropped.jpg,Healthy ," 1.00
+",Healthy,27.838,1
+15426_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,28.106,1
+14904_11Pre_od_upper_cropped.jpg,Healthy ," 0.60
+",TT,27.76,0
+11093_11Pre_os_upper_cropped.jpg,Healthy ," 0.67
+",Healthy,27.508,1
+15087_11Pre_os_upper_cropped.jpg,TT ," 0.53
+",TT,28.42,1
+13190_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,27.339,1
+15439_11Pre_os_upper_cropped.jpg,Healthy ," 0.88
+",TT,27.841,0
+13028_11Pre_od_upper_cropped.jpg,Healthy ," 0.98
+",Healthy,28.921,1
+14661_11Pre_os_upper_cropped.jpg,Healthy ," 0.74
+",TT,28.053,0
+14341_11Pre_od_upper_cropped.jpg,TT ," 0.87
+",TT,27.159,1
+12275_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,28.398,1
+14668_11Pre_od_upper_cropped.jpg,TT ," 0.83
+",TT,27.562,1
+15721_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.974,1
+14214_11Pre_od_upper_cropped.jpg,TT ," 0.69
+",TT,27.63,1
+14642_11Pre_os_upper_cropped.jpg,TT ," 0.60
+",TT,27.849,1
+15546_11Pre_od_upper_cropped.jpg,TT ," 0.90
+",TT,26.964,1
+12532_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,28.076,1
+11387_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,28.218,1
+15907_11Pre_os_upper_cropped.jpg,TT ," 0.97
+",TT,27.762,1
+15110_11Pre_os_upper_cropped.jpg,TT ," 0.88
+",TT,28.801,1
+15584_11Pre_od_upper_cropped.jpg,TT ," 0.97
+",TT,28.419,1
+15091_11Pre_os_upper_cropped.jpg,TT ," 0.61
+",TT,28.22,1
+15932_11Pre_os_upper_cropped.jpg,TT ," 0.99
+",TT,27.46,1
+12746_11Pre_os_upper_cropped.jpg,Healthy ," 0.71
+",Healthy,27.815,1
+15732_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.845,1
+15212_11Pre_od_upper_cropped.jpg,Healthy ," 0.82
+",TT,28.096,0
+1603197469974_cropped.jpg,TT ," 0.67
+",Healthy,27.627,0
+15053_11Pre_os_upper_cropped.jpg,Healthy ," 0.91
+",TT,28.068,0
+14727_11Pre_od_upper_cropped.jpg,TT ," 0.50
+",TT,27.614,1
+15597_11Pre_os_upper_cropped.jpg,TT ," 0.93
+",TT,27.488,1
+15493_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,27.324,1
+15007_11Pre_od_upper_cropped.jpg,TT ," 0.94
+",TT,28.45,1
+13559_11Pre_os_upper_cropped.jpg,Healthy ," 0.86
+",Healthy,27.839,1
+12901_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,27.884,1
+15014_11Pre_os_upper_cropped.jpg,TT ," 0.88
+",TT,27.79,1
+11764_11Pre_od_upper_cropped.jpg,TT ," 0.78
+",Healthy,28.13,0
+11612_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,28.366,1
+11160_11Pre_os_upper_cropped.jpg,Healthy ," 0.92
+",Healthy,27.706,1
+15879_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.71,1
+15675_11Pre_od_upper_cropped.jpg,Healthy ," 0.62
+",TT,27.887,0
+15580_11Pre_os_upper_cropped.jpg,Healthy ," 0.93
+",TT,27.947,0
+11896_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,28.288,1
+15099_11Pre_od_upper_cropped.jpg,Healthy ," 0.72
+",TT,28.364,0
+15666_11Pre_os_upper_cropped.jpg,TT ," 0.91
+",TT,26.932,1
+15593_11Pre_od_upper_cropped.jpg,TT ," 0.99
+",TT,27.838,1
+12337_11Pre_os_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,27.8,1
+15128_11Pre_os_upper_cropped.jpg,Healthy ," 0.89
+",TT,27.725,0
+12954_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,28.077,1
+15920_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.822,1
+15851_11Pre_od_upper_cropped.jpg,Healthy ," 0.75
+",TT,26.995,0
+15842_11Pre_os_upper_cropped.jpg,TT ," 0.99
+",TT,27.446,1
+15403_11Pre_od_upper_cropped.jpg,Healthy ," 0.97
+",TT,28.128,0
+14895_11Pre_od_upper_cropped.jpg,TT ," 0.99
+",TT,27.718,1
+15059_11Pre_os_upper_cropped.jpg,Healthy ," 0.85
+",TT,27.705,0
+13973_11Pre_os_upper_cropped.jpg,Healthy ," 0.93
+",TT,27.978,0
+15367_11Pre_os_upper_cropped.jpg,Healthy ," 1.00
+",TT,28.144,0
+15570_11Pre_os_upper_cropped.jpg,TT ," 0.88
+",TT,28.086,1
+15598_11Pre_od_upper_cropped.jpg,Healthy ," 0.94
+",Healthy,27.726,1
+1603356688592_cropped.jpg,Healthy ," 1.00
+",Healthy,27.456,1
+15224_11Pre_os_upper_cropped.jpg,Healthy ," 0.54
+",TT,27.772,0
+15352_11Pre_os_upper_cropped.jpg,TT ," 0.96
+",TT,27.768,1
+15113_11Pre_od_upper_cropped.jpg,Healthy ," 0.92
+",TT,28.011,0
+11141_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,28.28,1
+14799_11Pre_os_upper_cropped.jpg,Healthy ," 0.98
+",TT,27.877,0
+15638_11Pre_od_upper_cropped.jpg,TT ," 0.84
+",TT,27.543,1
+14632_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",TT,28.189,0
+1603272015339_cropped.jpg,Healthy ," 0.85
+",Healthy,27.163,1
+1603273132979_cropped.jpg,Healthy ," 0.92
+",Healthy,27.545,1
+15977_11Pre_od_upper_cropped.jpg,Healthy ," 0.93
+",TT,27.211,0
+15257_11Pre_os_upper_cropped.jpg,Healthy ," 0.79
+",TT,28.071,0
+15274_11Pre_os_upper_cropped.jpg,Healthy ," 0.71
+",TT,28.109,0
+16073_11Pre_os_upper_cropped.jpg,Healthy ," 0.93
+",Healthy,28.425,1
+15533_11Pre_od_upper_cropped.jpg,TT ," 0.94
+",TT,27.357,1
+15519_11Pre_os_upper_cropped.jpg,TT ," 0.94
+",TT,27.484,1
+11779_11Pre_od_upper_cropped.jpg,Healthy ," 0.59
+",Healthy,28.513,1
+16084_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",TT,27.807,0
+14628_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.792,1
+15954_11Pre_os_upper_cropped.jpg,TT ," 0.60
+",TT,27.977,1
+15796_11Pre_os_upper_cropped.jpg,TT ," 0.95
+",TT,26.76,1
+15487_11Pre_os_upper_cropped.jpg,TT ," 0.90
+",TT,27.54,1
+15785_11Pre_od_upper_cropped.jpg,Healthy ," 0.82
+",TT,27.277,0
+15494_11Pre_od_upper_cropped.jpg,TT ," 0.73
+",TT,28.211,1
+15525_11Pre_os_upper_cropped.jpg,TT ," 0.59
+",TT,27.359,1
+14473_11Pre_od_upper_cropped.jpg,Healthy ," 0.98
+",TT,27.753,0
+1603271985389_cropped.jpg,Healthy ," 1.00
+",Healthy,27.569,1
+15951_11Pre_od_upper_cropped.jpg,TT ," 0.96
+",TT,27.939,1
+12044_11Pre_od_upper_cropped.jpg,Healthy ," 0.98
+",Healthy,28.356,1
+14748_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",TT,27.945,0
+14614_11Pre_od_upper_cropped.jpg,TT ," 0.52
+",TT,27.799,1
+15570_11Pre_od_upper_cropped.jpg,TT ," 0.75
+",TT,27.872,1
+15050_11Pre_os_upper_cropped.jpg,TT ," 0.99
+",TT,27.747,1
+15685_11Pre_os_upper_cropped.jpg,TT ," 0.75
+",TT,27.842,1
+14678_11Pre_os_upper_cropped.jpg,Healthy ," 0.87
+",TT,26.986,0
+15594_11Pre_os_upper_cropped.jpg,TT ," 0.76
+",TT,27.656,1
+15237_11Pre_os_upper_cropped.jpg,Healthy ," 0.92
+",TT,27.84,0
+15717_11Pre_od_upper_cropped.jpg,TT ," 0.98
+",TT,28.359,1
+13743_11Pre_os_upper_cropped.jpg,Healthy ," 0.93
+",Healthy,27.892,1
+15922_11Pre_od_upper_cropped.jpg,Healthy ," 0.61
+",TT,27.57,0
+15069_11Pre_os_upper_cropped.jpg,Healthy ," 0.55
+",TT,28.311,0
+15658_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.125,1
+15433_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,27.794,1
+11346_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,28.443,1
+15084_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",TT,28.293,0
+15701_11Pre_od_upper_cropped.jpg,TT ," 0.93
+",TT,27.345,1
+15109_11Pre_os_upper_cropped.jpg,TT ," 0.94
+",TT,27.781,1
+13168_11Pre_od_upper_cropped.jpg,Healthy ," 0.98
+",Healthy,28.026,1
+15553_11Pre_od_upper_cropped.jpg,Healthy ," 0.81
+",Healthy,27.879,1
+15404_11Pre_os_upper_cropped.jpg,TT ," 0.51
+",TT,28.379,1
+1603177846028_cropped.jpg,Healthy ," 1.00
+",Healthy,27.621,1
+1602928394700_cropped.jpg,Healthy ," 1.00
+",Healthy,27.409,1
+13170_11Pre_os_upper_cropped.jpg,Healthy ," 0.97
+",Healthy,28.37,1
+12793_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,27.473,1
+11126_11Pre_od_upper_cropped.jpg,Healthy ," 0.92
+",Healthy,28.185,1
+15875_11Pre_os_upper_cropped.jpg,TT ," 0.97
+",TT,27.374,1
+14888_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.514,1
+11081_11Pre_os_upper_cropped.jpg,Healthy ," 0.92
+",Healthy,27.527,1
+15936_11Pre_os_upper_cropped.jpg,TT ," 0.95
+",TT,27.87,1
+14659_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.872,1
+12374_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,27.628,1
+14792_11Pre_od_upper_cropped.jpg,Healthy ," 0.98
+",TT,27.815,0
+15763_11Pre_od_upper_cropped.jpg,TT ," 0.63
+",TT,26.817,1
+13396_11Pre_od_upper_cropped.jpg,Healthy ," 0.93
+",Healthy,27.088,1
+12237_11Pre_os_upper_cropped.jpg,Healthy ," 0.94
+",Healthy,28.056,1
+16067_11Pre_os_upper_cropped.jpg,Healthy ," 0.98
+",TT,26.699,0
+15007_11Pre_os_upper_cropped.jpg,TT ," 0.97
+",TT,27.961,1
+15966_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.778,1
+14816_11Pre_os_upper_cropped.jpg,Healthy ," 0.90
+",TT,28.059,0
+14575_11Pre_os_upper_cropped.jpg,TT ," 0.97
+",TT,27.857,1
+16020_11Pre_os_upper_cropped.jpg,Healthy ," 0.92
+",Healthy,28.02,1
+15546_11Pre_os_upper_cropped.jpg,Healthy ," 0.89
+",TT,26.18,0
+1603272627895_cropped.jpg,Healthy ," 1.00
+",Healthy,27.711,1
+15091_11Pre_od_upper_cropped.jpg,TT ," 0.94
+",TT,28.252,1
+14651_11Pre_os_upper_cropped.jpg,Healthy ," 0.98
+",TT,27.879,0
+15559_11Pre_od_upper_cropped.jpg,TT ," 0.64
+",Healthy,26.978,0
+15079_11Pre_os_upper_cropped.jpg,TT ," 0.79
+",TT,28.1,1
+11047_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,28.847,1
+15555_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.559,1
+15862_11Pre_od_upper_cropped.jpg,Healthy ," 0.86
+",TT,27.458,0
+15409_11Pre_od_upper_cropped.jpg,Healthy ," 0.97
+",TT,28.018,0
+13857_11Pre_od_upper_cropped.jpg,Healthy ," 0.98
+",Healthy,27.743,1
+14180_11Pre_od_upper_cropped.jpg,TT ," 0.87
+",TT,28.063,1
+14609_11Pre_os_upper_cropped.jpg,TT ," 0.67
+",TT,28.716,1
+16083_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.867,1
+14816_11Pre_od_upper_cropped.jpg,TT ," 0.98
+",TT,28.43,1
+16071_11Pre_od_upper_cropped.jpg,TT ," 0.98
+",TT,27.246,1
+15485_11Pre_os_upper_cropped.jpg,TT ," 0.95
+",TT,27.683,1
+15190_11Pre_od_upper_cropped.jpg,TT ," 0.87
+",TT,27.22,1
+12861_11Pre_os_upper_cropped.jpg,Healthy ," 0.98
+",Healthy,27.535,1
+14800_11Pre_od_upper_cropped.jpg,Healthy ," 0.93
+",TT,28.303,0
+12889_11Pre_od_upper_cropped.jpg,TT ," 0.99
+",TT,28.133,1
+15568_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.731,1
+1603100054311_cropped.jpg,Healthy ," 1.00
+",Healthy,27.377,1
+1581614753069_cropped.jpg,Healthy ," 1.00
+",Healthy,27.198,1
+15388_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,27.839,1
+15121_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.811,1
+14859_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.793,1
+15107_11Pre_os_upper_cropped.jpg,TT ," 0.99
+",TT,28.096,1
+15910_11Pre_os_upper_cropped.jpg,Healthy ," 0.97
+",TT,28.025,0
+15090_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.822,1
+14726_11Pre_od_upper_cropped.jpg,TT ," 0.90
+",TT,27.196,1
+15102_11Pre_od_upper_cropped.jpg,Healthy ," 0.82
+",TT,27.711,0
+14876_11Pre_os_upper_cropped.jpg,Healthy ," 0.71
+",TT,27.426,0
+11109_11Pre_os_upper_cropped.jpg,Healthy ," 0.97
+",Healthy,27.591,1
+15376_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,28.329,1
+14644_11Pre_os_upper_cropped.jpg,TT ," 0.77
+",TT,27.924,1
+1581603158646_cropped.jpg,Healthy ," 0.98
+",Healthy,27.53,1
+15055_11Pre_os_upper_cropped.jpg,TT ," 0.81
+",TT,28.094,1
+15214_11Pre_od_upper_cropped.jpg,Healthy ," 0.97
+",TT,27.294,0
+15553_11Pre_os_upper_cropped.jpg,TT ," 0.53
+",TT,27.998,1
+14699_11Pre_od_upper_cropped.jpg,TT ," 0.91
+",TT,27.8,1
+13950_11Pre_os_upper_cropped.jpg,Healthy ," 0.97
+",Healthy,27.888,1
+16030_11Pre_od_upper_cropped.jpg,Healthy ," 0.88
+",TT,27.624,0
+15594_11Pre_od_upper_cropped.jpg,TT ," 0.91
+",TT,28.094,1
+15696_11Pre_os_upper_cropped.jpg,Healthy ," 0.79
+",TT,27.267,0
+13981_11Pre_od_upper_cropped.jpg,Healthy ," 0.56
+",TT,27.725,0
+14641_11Pre_od_upper_cropped.jpg,TT ," 0.98
+",TT,27.638,1
+11384_11Pre_os_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,27.796,1
+15390_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,28.016,1
+14757_11Pre_os_upper_cropped.jpg,TT ," 0.57
+",TT,27.747,1
+15968_11Pre_os_upper_cropped.jpg,TT ," 0.93
+",TT,27.85,1
+15529_11Pre_od_upper_cropped.jpg,TT ," 0.98
+",TT,27.512,1
+14786_11Pre_od_upper_cropped.jpg,TT ," 0.53
+",TT,27.746,1
+14748_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",TT,27.876,0
+15181_11Pre_od_upper_cropped.jpg,Healthy ," 0.96
+",Healthy,27.788,1
+14811_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",TT,27.853,0
+1581603174923_cropped.jpg,Healthy ," 1.00
+",Healthy,27.319,1
+1603183502878_cropped.jpg,Healthy ," 0.99
+",Healthy,27.287,1
+16046_11Pre_os_upper_cropped.jpg,Healthy ," 0.85
+",TT,27.426,0
+15985_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.666,1
+15337_11Pre_os_upper_cropped.jpg,Healthy ," 0.82
+",TT,26.772,0
+15181_11Pre_os_upper_cropped.jpg,TT ," 0.99
+",TT,27.88,1
+14624_11Pre_os_upper_cropped.jpg,TT ," 0.85
+",TT,27.559,1
+15311_11Pre_os_upper_cropped.jpg,Healthy ," 1.00
+",TT,28.014,0
+15989_11Pre_od_upper_cropped.jpg,TT ," 0.90
+",TT,27.524,1
+15155_11Pre_os_upper_cropped.jpg,TT ," 0.57
+",TT,27.456,1
+11787_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,28.553,1
+12679_11Pre_os_upper_cropped.jpg,TT ," 0.96
+",TT,27.86,1
+15601_11Pre_os_upper_cropped.jpg,TT ," 0.92
+",TT,27.839,1
+15482_11Pre_od_upper_cropped.jpg,Healthy ," 0.54
+",TT,27.434,0
+12619_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,27.903,1
+14852_11Pre_od_upper_cropped.jpg,Healthy ," 0.78
+",TT,27.464,0
+15889_11Pre_os_upper_cropped.jpg,TT ," 0.99
+",TT,27.106,1
+13319_11Pre_od_upper_cropped.jpg,Healthy ," 0.95
+",Healthy,27.951,1
+15046_11Pre_os_upper_cropped.jpg,TT ," 0.99
+",TT,27.752,1
+15727_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.641,1
+15436_11Pre_os_upper_cropped.jpg,Healthy ," 0.74
+",Healthy,27.735,1
+15540_11Pre_os_upper_cropped.jpg,Healthy ," 0.81
+",TT,27.785,0
+14648_11Pre_od_upper_cropped.jpg,TT ," 0.99
+",TT,27.532,1
+11074_11Pre_od_upper_cropped.jpg,Healthy ," 0.96
+",Healthy,27.81,1
+15055_11Pre_od_upper_cropped.jpg,TT ," 0.69
+",TT,28.271,1
+1603275672551_cropped.jpg,Healthy ," 1.00
+",Healthy,27.928,1
+15090_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.46,1
+15596_11Pre_od_upper_cropped.jpg,TT ," 0.99
+",TT,28.198,1
+15102_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,28.258,1
+14700_11Pre_od_upper_cropped.jpg,TT ," 0.93
+",TT,27.615,1
+14881_11Pre_od_upper_cropped.jpg,TT ," 0.88
+",TT,27.55,1
+1602933410622_cropped.jpg,Healthy ," 1.00
+",Healthy,28.037,1
+14884_11Pre_os_upper_cropped.jpg,Healthy ," 0.98
+",TT,28.182,0
+15879_11Pre_os_upper_cropped.jpg,TT ," 0.97
+",TT,27.86,1
+15675_11Pre_os_upper_cropped.jpg,TT ," 0.97
+",TT,28.514,1
+15703_11Pre_os_upper_cropped.jpg,TT ," 0.99
+",TT,27.817,1
+11135_11Pre_os_upper_cropped.jpg,Healthy ," 0.93
+",Healthy,27.965,1
+15230_11Pre_os_upper_cropped.jpg,TT ," 0.78
+",TT,28.218,1
+15756_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,26.631,1
+14639_11Pre_os_upper_cropped.jpg,TT ," 0.96
+",TT,28.1,1
+15458_11Pre_os_upper_cropped.jpg,TT ," 0.74
+",TT,27.077,1
+15339_11Pre_os_upper_cropped.jpg,Healthy ," 0.96
+",TT,27.76,0
+15504_11Pre_od_upper_cropped.jpg,Healthy ," 0.85
+",TT,26.963,0
+15269_11Pre_od_upper_cropped.jpg,Healthy ," 0.97
+",Healthy,28.017,1
+12123_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,27.396,1
+1603109564313_cropped.jpg,Healthy ," 0.99
+",Healthy,27.277,1
+14253_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",TT,27.357,0
+15493_11Pre_od_upper_cropped.jpg,TT ," 0.89
+",TT,28.211,1
+1581619630164_cropped.jpg,TT ," 0.69
+",Healthy,26.316,0
+14291_11Pre_os_upper_cropped.jpg,TT ," 0.59
+",TT,27.456,1
+15610_11Pre_os_upper_cropped.jpg,Healthy ," 0.58
+",TT,27.52,0
+14680_11Pre_od_upper_cropped.jpg,Healthy ," 0.99
+",TT,27.987,0
+14642_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.795,1
+15066_11Pre_od_upper_cropped.jpg,TT ," 0.65
+",TT,28.409,1
+15907_11Pre_od_upper_cropped.jpg,TT ," 0.99
+",TT,26.697,1
+14059_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,28.273,1
+15584_11Pre_os_upper_cropped.jpg,Healthy ," 0.80
+",TT,28.137,0
+15056_11Pre_os_upper_cropped.jpg,TT ," 0.94
+",TT,28.276,1
+15683_11Pre_os_upper_cropped.jpg,Healthy ," 0.69
+",TT,28.06,0
+15204_11Pre_os_upper_cropped.jpg,Healthy ," 0.96
+",TT,27.381,0
+15119_11Pre_os_upper_cropped.jpg,Healthy ," 0.96
+",Healthy,28.006,1
+15581_11Pre_od_upper_cropped.jpg,Healthy ," 0.94
+",TT,27.427,0
+15799_11Pre_od_upper_cropped.jpg,Healthy ," 0.97
+",TT,28.068,0
+15443_11Pre_os_upper_cropped.jpg,TT ," 0.91
+",TT,27.953,1
+11960_11Pre_od_upper_cropped.jpg,Healthy ," 0.97
+",Healthy,28.402,1
+15628_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",TT,28.545,0
+15194_11Pre_od_upper_cropped.jpg,Healthy ," 0.94
+",TT,26.975,0
+15605_11Pre_od_upper_cropped.jpg,TT ," 0.96
+",TT,27.417,1
+12115_11Pre_os_upper_cropped.jpg,Healthy ," 0.92
+",Healthy,28.408,1
+15474_11Pre_od_upper_cropped.jpg,Healthy ," 0.97
+",Healthy,27.066,1
+15943_11Pre_os_upper_cropped.jpg,TT ," 0.98
+",TT,27.511,1
+14798_11Pre_od_upper_cropped.jpg,Healthy ," 0.92
+",TT,28.069,0
+1602933790695_cropped.jpg,Healthy ," 1.00
+",Healthy,28.26,1
+15544_11Pre_od_upper_cropped.jpg,TT ," 0.92
+",TT,27.021,1
+15093_11Pre_os_upper_cropped.jpg,Healthy ," 0.91
+",TT,28.275,0
+15366_11Pre_od_upper_cropped.jpg,Healthy ," 0.94
+",TT,27.997,0
+14359_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.612,1
+15660_11Pre_od_upper_cropped.jpg,Healthy ," 0.70
+",TT,27.094,0
+15058_11Pre_od_upper_cropped.jpg,Healthy ," 0.96
+",TT,27.543,0
+15220_11Pre_os_upper_cropped.jpg,Healthy ," 0.96
+",TT,27.901,0
+15070_11Pre_od_upper_cropped.jpg,Healthy ," 0.72
+",TT,27.695,0
+15565_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,26.888,1
+15678_11Pre_os_upper_cropped.jpg,TT ," 0.99
+",TT,27.396,1
+15728_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.592,1
+15500_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,28.196,1
+15499_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.762,1
+14625_11Pre_os_upper_cropped.jpg,Healthy ," 0.90
+",TT,28.234,0
+14829_11Pre_os_upper_cropped.jpg,TT ," 0.98
+",TT,28.084,1
+11015_11Pre_os_upper_cropped.jpg,Healthy ," 0.94
+",Healthy,28.345,1
+15034_11Pre_os_upper_cropped.jpg,Healthy ," 1.00
+",TT,27.825,0
+16051_11Pre_od_upper_cropped.jpg,Healthy ," 0.86
+",TT,26.968,0
+15256_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,27.766,1
+12683_11Pre_os_upper_cropped.jpg,Healthy ," 0.79
+",Healthy,28.522,1
+15835_11Pre_os_upper_cropped.jpg,TT ," 0.99
+",TT,27.07,1
+15490_11Pre_os_upper_cropped.jpg,Healthy ," 0.95
+",TT,27.229,0
+15716_11Pre_od_upper_cropped.jpg,Healthy ," 0.95
+",TT,27.834,0
+15382_11Pre_os_upper_cropped.jpg,Healthy ," 0.78
+",TT,28.124,0
+14694_11Pre_os_upper_cropped.jpg,Healthy ," 0.96
+",TT,28.302,0
+15881_11Pre_od_upper_cropped.jpg,TT ," 0.51
+",TT,27.867,1
+14870_11Pre_od_upper_cropped.jpg,TT ," 0.58
+",TT,27.868,1
+1603267567723_cropped.jpg,Healthy ," 1.00
+",Healthy,27.119,1
+15726_11Pre_os_upper_cropped.jpg,Healthy ," 0.88
+",TT,27.993,0
+15583_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.796,1
+1602925202907_cropped.jpg,Healthy ," 1.00
+",Healthy,27.9,1
+1603008401564_cropped.jpg,Healthy ," 1.00
+",Healthy,27.175,1
+14065_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.954,1
+15175_11Pre_od_upper_cropped.jpg,Healthy ," 0.93
+",TT,28.131,0
+15036_11Pre_od_upper_cropped.jpg,TT ," 0.58
+",TT,28.251,1
+14273_11Pre_od_upper_cropped.jpg,TT ," 0.55
+",TT,27.929,1
+14477_11Pre_os_upper_cropped.jpg,Healthy ," 0.97
+",Healthy,27.283,1
+15038_11Pre_os_upper_cropped.jpg,Healthy ," 0.97
+",TT,27.826,0
+14633_11Pre_os_upper_cropped.jpg,TT ," 0.97
+",TT,28.028,1
+15298_11Pre_od_upper_cropped.jpg,Healthy ," 0.63
+",TT,27.255,0
+1581614263845_cropped.jpg,Healthy ," 0.94
+",Healthy,26.753,1
+15659_11Pre_od_upper_cropped.jpg,Healthy ," 0.80
+",TT,27.065,0
+1603177614179_cropped.jpg,Healthy ," 0.96
+",Healthy,28.471,1
+15428_11Pre_od_upper_cropped.jpg,Healthy ," 0.58
+",TT,28.213,0
+15590_11Pre_od_upper_cropped.jpg,TT ," 1.00
+",TT,27.792,1
+1603005531957_cropped.jpg,Healthy ," 0.93
+",Healthy,27.212,1
+14663_11Pre_os_upper_cropped.jpg,TT ," 0.94
+",TT,27.58,1
+14727_11Pre_os_upper_cropped.jpg,TT ," 0.73
+",TT,27.719,1
+11089_11Pre_od_upper_cropped.jpg,Healthy ," 0.66
+",Healthy,27.984,1
+11134_11Pre_os_upper_cropped.jpg,Healthy ," 0.99
+",Healthy,28.058,1
+15937_11Pre_os_upper_cropped.jpg,Healthy ," 0.62
+",TT,27.484,0
+11548_11Pre_os_upper_cropped.jpg,Healthy ," 0.94
+",Healthy,27.944,1
+13269_11Pre_od_upper_cropped.jpg,TT ," 0.57
+",Healthy,28.158,0
+15029_11Pre_os_upper_cropped.jpg,TT ," 0.92
+",TT,28.006,1
+14023_11Pre_os_upper_cropped.jpg,TT ," 0.51
+",TT,28.065,1
+1581615561194_cropped.jpg,Healthy ," 0.95
+",Healthy,27.035,1
+15788_11Pre_od_upper_cropped.jpg,TT ," 0.91
+",TT,27.46,1
+1603274390234_cropped.jpg,Healthy ," 0.99
+",Healthy,27.254,1
+13367_11Pre_od_upper_cropped.jpg,Healthy ," 1.00
+",Healthy,28.24,1
+15511_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,27.765,1
+15800_11Pre_os_upper_cropped.jpg,TT ," 0.98
+",TT,27.505,1
+14606_11Pre_os_upper_cropped.jpg,TT ," 0.94
+",TT,27.572,1
+15562_11Pre_os_upper_cropped.jpg,Healthy ," 0.67
+",TT,28.493,0
+14640_11Pre_os_upper_cropped.jpg,TT ," 0.57
+",TT,27.95,1
+15064_11Pre_os_upper_cropped.jpg,Healthy ," 1.00
+",TT,28.474,0
+14593_11Pre_os_upper_cropped.jpg,TT ," 0.98
+",TT,28.05,1
+15669_11Pre_os_upper_cropped.jpg,TT ," 1.00
+",TT,26.928,1
+15349_11Pre_od_upper_cropped.jpg,Healthy ," 0.71
+",TT,28.298,0
+13996_11Pre_os_upper_cropped.jpg,Healthy ," 0.54
+",TT,28.146,0
+13785_11Pre_od_upper_cropped.jpg,Healthy ," 0.96
+",Healthy,27.909,1
+,,,,,283
+,,,,,0.702233251

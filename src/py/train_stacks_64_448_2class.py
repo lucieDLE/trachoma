@@ -47,22 +47,37 @@ class Attention(tf.keras.layers.Layer):
 
         return context_vector, attention_weights
 
-def make_model():
+class TTModel(tf.keras.Model):
+    def __init__(self):
+        super(TTModel, self).__init__()
 
-    x0 = tf.keras.Input(shape=[384, 384, 3])
-    resnet50 = tf.keras.applications.ResNet50(include_top=False, weights='imagenet', input_tensor=x0, pooling='avg')
+        x0 = tf.keras.Input(shape=[384, 384, 3])
+        self.resnet50 = tf.keras.applications.ResNet50V2(include_top=False, weights='imagenet', input_tensor=x0, pooling='avg')
+        
+        self.PreProcess = tf.keras.layers.Rescaling(1/127.5, offset=-1)
+        self.TD = layers.TimeDistributed(self.resnet50)
 
-    x0 = tf.keras.Input(shape=[None, 384, 384, 3])
-    x = preprocess_input(x0)
-    x = layers.TimeDistributed(resnet50)(x)
+        x0 = tf.keras.Input(shape=[None, 2048])
+        
+        self.V = layers.Dense(256)
 
-    q = layers.Dense(128)(x)
-    v = layers.Dense(256)(x)
+        self.A = Attention(128, 256)
+        self.P = layers.Dense(1, activation='sigmoid', name='predictions')
+        
+        v = self.V(x0)
+        x, w_a = self.A(x0, v)
+        x = self.P(x)
 
-    x, w_a = Attention(64, 256)(q, v)
-    x = layers.Dense(1, activation='sigmoid', name='predictions')(x)
+        self.model_prediction = tf.keras.Model(inputs=x0, outputs=x)
 
-    return tf.keras.Model(inputs=x0, outputs=x)
+    def call(self, x):
+
+        x = self.PreProcess(x)
+        x = self.TD(x)
+
+        x = self.model_prediction(x)
+
+        return x
 
 class DatasetGenerator:
     def __init__(self, df, unique_class_weights):
@@ -135,7 +150,7 @@ class DatasetGeneratorValid:
             yield img_np, np.array([sev]), np.array([self.unique_class_weights[sev]])
 
 
-gpus_index = [2]
+gpus_index = [1]
 print("Using gpus:", gpus_index)
 gpus = tf.config.list_physical_devices('GPU')
 
@@ -183,7 +198,8 @@ print("Train size:", train_df.size, "Valid size:", valid_df.size)
 dataset = DatasetGenerator(train_df, unique_class_weights).get()
 dataset_validation = DatasetGenerator(valid_df, unique_class_weights).get()
 
-model = make_model()
+model = TTModel()
+model.build(input_shape=[None, None, 384, 384, 3])
 model.summary()
 
 optimizer = tf.keras.optimizers.Adam(1e-4)
@@ -192,12 +208,13 @@ model.compile(optimizer=optimizer, loss=tf.keras.losses.BinaryCrossentropy(), me
 # ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=optimizer, model=model)
 # checkpoint_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=3, checkpoint_name=modelname)
 
-checkpoint_path = "/work/jprieto/data/remote/EGower/train/stack_training_09072021_64_448_2class_09102021"
+checkpoint_path = "/work/jprieto/data/remote/EGower/jprieto/train/stack_training_10042021_64_448_2class/"
 
 model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
     monitor='val_loss',
     mode='auto',
-    save_best_only=True)
+    save_best_only=True,
+    save_weights_only=True)
 model_early_stopping_callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10)
 # model_loss_error_callback = LossAndErrorPrintingCallback()
 

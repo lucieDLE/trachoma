@@ -1,9 +1,9 @@
 import numpy as np
 import itk
 
-def GetImage(img_np):
+def GetImage(img_np, ctype = 'float'):
 	img_np_shape = np.shape(img_np)
-	ComponentType = itk.ctype('float')
+	ComponentType = itk.ctype(ctype)
 
 	Dimension = img_np.ndim - 1
 	PixelDimension = img_np.shape[-1]

@@ -1,7 +1,33 @@
 
 import tensorflow as tf
 from tensorflow.keras import layers
-from tensorflow.keras.applications.resnet50 import preprocess_input
+from tensorflow.keras.utils import OrderedEnqueuer
+
+import json
+import os
+import glob
+import sys
+import pandas as pd
+import numpy as np
+import SimpleITK as sitk
+
+from sklearn.utils import class_weight
+from sklearn.utils import shuffle
+
+import pickle
+import math
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+        
 
 class Attention(tf.keras.layers.Layer):
     def __init__(self, units, w_units):
@@ -21,79 +47,64 @@ class Attention(tf.keras.layers.Layer):
         context_vector = attention_weights * values
         context_vector = tf.reduce_sum(context_vector, axis=1)
 
-        return context_vector, attention_weights
+        return context_vector, score
+
+class Features(tf.keras.layers.Layer):
+    def __init__(self):
+        super(Features, self).__init__()
+
+        self.resnet = tf.keras.applications.ResNet50V2(include_top=False, weights='imagenet', input_tensor=tf.keras.Input(shape=[448, 448, 3]), pooling=None)
+        
+        self.center_crop = tf.keras.layers.CenterCrop(448, 448)
+        self.rescale = layers.Rescaling(1/127.5, offset=-1)
+        self.conv = layers.Conv2D(512, (2, 2), strides=(2, 2))
+        self.avg = layers.GlobalAveragePooling2D()
+
+    def compute_output_shape(self, input_shape):
+        return (None, 512)
+
+
+    def call(self, x):
+
+        x = self.center_crop(x)
+        x = self.rescale(x)
+        x = self.resnet(x)
+        x = self.conv(x)
+        x = self.avg(x)
+
+        return x
+
 
 class TTModel(tf.keras.Model):
     def __init__(self):
-        super(TTModel, self).__init__(name='')
+        super(TTModel, self).__init__()
 
-        x0 = tf.keras.Input(shape=[384, 384, 3])
-        self.resnet50 = tf.keras.applications.ResNet50(include_top=False, weights='imagenet', input_tensor=x0, pooling='avg')        
-        self.td = layers.TimeDistributed(self.resnet50)
+        self.features = Features()        
 
-        self.q = layers.Dense(128)
-        self.v = layers.Dense(256)
+        self.TD = layers.TimeDistributed(self.features)
+        self.R = layers.Reshape((-1, 512))
 
-        self.att = Attention(128, 256)
-        self.pred = layers.Dense(1, activation='sigmoid', name='predictions')
+        self.V = layers.Dense(256)
+        self.A = Attention(128, 1)        
+        self.P = layers.Dense(2, activation='softmax', name='predictions')
+        
+    def call(self, x):
 
-    def call(self, x0, training=False):
+        x = self.TD(x)
+        x = self.R(x)
 
-        x = preprocess_input(x0)
+        x_v = self.V(x)
+        x_a, x_s = self.A(x, x_v)
+        
+        x = self.P(x_a)
+        x_v_p = self.P(x_v)
 
-        x = self.td(x)
+        return x, x_a, x_v, x_s, x_v_p
 
-        q = self.q(x)
-        v = self.v(x)
+checkpoint_path = "/work/jprieto/data/remote/EGower/jprieto/train/stack_training_resnet_att_17012022_weights/stack_training_resnet_att_17012022"
 
-        x = self.att(q, v)
-
-        return self.pred(x)
-
-def make_model():
-    
-    x0 = tf.keras.Input(shape=[384, 384, 3])
-    resnet50 = tf.keras.applications.ResNet50(include_top=False, weights='imagenet', input_tensor=x0, pooling='avg')
-
-    x0 = tf.keras.Input(shape=[None, 384, 384, 3])
-    x = preprocess_input(x0)
-    x = layers.TimeDistributed(resnet50)(x)
-
-    q = layers.Dense(128)(x)
-    v = layers.Dense(256)(x)
-
-    x, w_a = Attention(64, 256)(q, v)
-
-    x = layers.Dense(1, activation='sigmoid', name='predictions')(x)
-
-    return tf.keras.Model(inputs=x0, outputs=x)
-
-
-model = make_model()
-
-model_path = "/work/jprieto/data/remote/EGower/train/stack_training_09072021_64_448_2class_09102021"
-
-model.set_weights(tf.keras.models.load_model(model_path, custom_objects={'tf': tf, 'Attention': Attention}).get_weights())
-
-model.summary()
-
-model.save("/work/jprieto/data/remote/EGower/jprieto/trained/stack_training_09072021_2class")
-
-
-x0 = tf.keras.Input(shape=[384, 384, 3])
-x = preprocess_input(x0)
-resnet50 = tf.keras.applications.ResNet50(include_top=False, weights='imagenet', input_tensor=x, pooling='avg')
-td = tf.keras.layers.TimeDistributed(resnet50)
-
-td.set_weights(model.layers[3].get_weights())
-resnet50.summary()
-resnet50.save("/work/jprieto/data/remote/EGower/jprieto/trained/stack_training_09072021_2class_resnet50")
-
-x0 = tf.keras.Input(shape=[32, 2048])
-q = model.layers[4](x0)
-v = model.layers[5](x0)
-x, w_a = model.layers[6](q, v)
-x = model.layers[7](x)
-feat_model = tf.keras.Model(inputs=x0, outputs=x)
-feat_model.summary()
-feat_model.save("/work/jprieto/data/remote/EGower/jprieto/trained/stack_training_09072021_2class_prediction")
+model = TTModel()
+model.load_weights(checkpoint_path)
+x = tf.keras.layers.Input((None, 448, 448, 3))
+model(x)
+model.save("/work/jprieto/data/remote/EGower/jprieto/trained/stack_training_resnet_att_17012022")

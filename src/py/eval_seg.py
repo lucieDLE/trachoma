@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import itertools
 from scipy import interp
 import pandas as pd
-import itk
+import SimpleITK as sitk
 import seaborn as sns
 
 def plot_confusion_matrix(cm, classes,
@@ -79,9 +79,9 @@ def main(args):
   for i, row in df.iterrows():
 
     print("Reading:", row["seg"])
-    y_true = itk.imread(row["seg"])
+    y_true = sitk.GetArrayFromImage(sitk.ReadImage(row["seg"]))
     print("Reading:", row["prediction"])
-    y_pred = itk.imread(row["prediction"])
+    y_pred = sitk.GetArrayFromImage(sitk.ReadImage(row["prediction"]))
 
     y_pred = np.reshape(y_pred, -1)
     y_true = np.reshape(y_true, -1)
