@@ -10,34 +10,32 @@ def main(args):
 	img_np = sitk.GetArrayFromImage(img)
 	seg_np = sitk.GetArrayFromImage(seg)
 
-	out_stack = poly_fit(img_np, seg_np, args.label_num, args.size, args.num_samples)
+	
+	out_stack = poly_fit(img_np, seg_np, args.label_num, args.size, args.num_samples, args.view)	
 	
 	out_img = sitk.GetImageFromArray(out_stack)
 	sitk.WriteImage(out_img, args.out)
-
-	if args.view:
-
-		plt.imshow(img_np)
-
-		cmap = ListedColormap(["black", "tab:red", "tab:green", "tab:blue"])
-		plt.imshow(seg_np, cmap=cmap, interpolation='nearest', alpha=0.4)
-
-		plt.plot(x_values, y_values, linewidth=2, color="red")
-		plt.plot(x, y)
-		plt.show()
-
-def poly_fit(img_np, seg_np, label_num=3, size=256, num_samples=64):	
 	
+
+def poly_fit(img_np, seg_np, label_num=3, size=256, num_samples=64, view=False):
+	
+	neigborhood = int(size/2)
+
+	img_np = np.pad(img_np, ((neigborhood, neigborhood), (neigborhood, neigborhood), (0, 0)))
+	seg_np = np.pad(seg_np, ((neigborhood, neigborhood), (neigborhood, neigborhood)))
+
 	y, x = np.where(seg_np == label_num)	
 
 	z = np.polyfit(x, y, 3)
 	poly = np.poly1d(z)
+	
 
-	neigborhood = int(size/2)
-
-	min_x = np.min(x) + neigborhood
-	max_x = np.max(x) - neigborhood
-	max_y = np.max(y) - neigborhood
+	# min_x = np.min(x) + neigborhood
+	# max_x = np.max(x) - neigborhood
+	# max_y = np.max(y) - neigborhood
+	min_x = np.min(x)
+	max_x = np.max(x)
+	max_y = np.max(y)
 
 	dx = (max_x - min_x)/num_samples
 
@@ -67,6 +65,17 @@ def poly_fit(img_np, seg_np, label_num=3, size=256, num_samples=64):
 		out_stack.append(crop_np)
 
 	out_stack = np.array(out_stack)
+
+	if view:
+
+		plt.imshow(img_np)
+
+		cmap = ListedColormap(["black", "tab:red", "tab:green", "tab:blue"])
+		plt.imshow(seg_np, cmap=cmap, interpolation='nearest', alpha=0.4)
+
+		plt.plot(x_values, y_values, linewidth=2, color="red")
+		plt.plot(x, y)
+		plt.show()
 
 	return out_stack
 

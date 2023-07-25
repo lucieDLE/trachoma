@@ -120,7 +120,7 @@ if __name__ == "__main__":
 
 	csv_group = parser.add_argument_group('CSV extra parameters')
 	csv_group.add_argument('--csv_column', type=str, default='image', help='CSV column name (Only used if flag csv is used)')
-	csv_group.add_argument('--csv_root_path', type=str, default='', help='Replaces a root path directory to empty, this is use to recreate a directory structure in the output directory, otherwise, the output name will be the name in the csv (only if csv flag is used)')
+	csv_group.add_argument('--csv_root_path', type=str, default=None, help='Replaces a root path directory to empty, this is use to recreate a directory structure in the output directory, otherwise, the output name will be the name in the csv (only if csv flag is used)')
 
 	transform_group = parser.add_argument_group('Transform parameters')
 	transform_group.add_argument('--ref', type=str, help='Reference image. Use an image as reference for the resampling', default=None)
@@ -138,7 +138,7 @@ if __name__ == "__main__":
 	img_group.add_argument('--rgb', type=bool, help='Use RGB type pixel', default=False)
 
 	out_group = parser.add_argument_group('Ouput parameters')
-	out_group.add_argument('--ow', type=int, help='Overwrite', default=1)
+	out_group.add_argument('--ow', type=int, help='Overwrite', default=0)
 	out_group.add_argument('--out', type=str, help='Output image/directory', default="./out.nrrd")
 	out_group.add_argument('--out_ext', type=str, help='Output extension type', default=None)
 
@@ -167,14 +167,16 @@ if __name__ == "__main__":
 					os.makedirs(os.path.dirname(fobj["out"]))
 				if not os.path.exists(fobj["out"]) or args.ow:
 					filenames.append(fobj)
-	elif(args.csv):
-		replace_dir_name = args.csv_root_path
+	elif(args.csv):		
 		with open(args.csv) as csvfile:
 			csv_reader = csv.DictReader(csvfile)
 			for row in csv_reader:
 				fobj = {}
 				fobj["img"] = row[args.csv_column]
-				fobj["out"] = row[args.csv_column].replace(args.csv_root_path, args.out)
+				if args.csv_root_path is not None:
+					fobj["out"] = row[args.csv_column].replace(args.csv_root_path, args.out)
+				else:
+					fobj["out"] = os.path.join(args.out, row[args.csv_column])
 				if "ref" in row:
 					fobj["ref"] = row["ref"]
 

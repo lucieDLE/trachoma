@@ -99,7 +99,7 @@ if __name__ == "__main__":
 
     csv_group = parser.add_argument_group('CSV extra parameters')
     csv_group.add_argument('--csv_column', type=str, default='image', help='CSV column name (Only used if flag csv is used)')
-    csv_group.add_argument('--csv_root_path', type=str, default='', help='Replaces a root path directory to empty, this is use to recreate a directory structure in the output directory, otherwise, the output name will be the name in the csv (only if csv flag is used)')
+    csv_group.add_argument('--csv_root_path', type=str, default=None, help='Replaces a root path directory to empty, this is use to recreate a directory structure in the output directory, otherwise, the output name will be the name in the csv (only if csv flag is used)')
 
     transform_group = parser.add_argument_group('Transform parameters')
     transform_group.add_argument('--ref', type=str, help='Reference image. Use an image as reference for the resampling', default=None)
@@ -111,10 +111,10 @@ if __name__ == "__main__":
     transform_group.add_argument('--fit_spacing', type=bool, help='Fit spacing to output', default=False)
     transform_group.add_argument('--iso_spacing', type=bool, help='Same spacing for resampled output', default=False)
 
-    img_group = parser.add_argument_group('Image parameters')
-    img_group.add_argument('--image_dimension', type=int, help='Image dimension', default=2)
-    img_group.add_argument('--pixel_dimension', type=int, help='Pixel dimension', default=1)
-    img_group.add_argument('--rgb', type=bool, help='Use RGB type pixel', default=False)
+    # img_group = parser.add_argument_group('Image parameters')
+    # img_group.add_argument('--image_dimension', type=int, help='Image dimension', default=2)
+    # img_group.add_argument('--pixel_dimension', type=int, help='Pixel dimension', default=1)
+    # img_group.add_argument('--rgb', type=bool, help='Use RGB type pixel', default=False)
 
     out_group = parser.add_argument_group('Ouput parameters')
     out_group.add_argument('--ow', type=int, help='Overwrite', default=1)
@@ -146,14 +146,16 @@ if __name__ == "__main__":
                     os.makedirs(os.path.dirname(fobj["out"]))
                 if not os.path.exists(fobj["out"]) or args.ow:
                     filenames.append(fobj)
-    elif(args.csv):
-        replace_dir_name = args.csv_root_path
+    elif(args.csv):        
         with open(args.csv) as csvfile:
             csv_reader = csv.DictReader(csvfile)
             for row in csv_reader:
                 fobj = {}
                 fobj["img"] = row[args.csv_column]
-                fobj["out"] = row[args.csv_column].replace(args.csv_root_path, args.out)
+                if(args.csv_root_path is not None):
+                    fobj["out"] = row[args.csv_column].replace(args.csv_root_path, args.out)
+                else:
+                    fobj["out"] = os.path.join(args.out, row[args.csv_column])
                 if "ref" in row:
                     fobj["ref"] = row["ref"]
 
@@ -168,14 +170,6 @@ if __name__ == "__main__":
                     filenames.append(fobj)
     else:
         raise "Set img or dir to resample!"
-
-    if(args.rgb):
-        if(args.pixel_dimension == 3):
-            print("Using: RGB type pixel with unsigned char")
-        elif(args.pixel_dimension == 4):
-            print("Using: RGBA type pixel with unsigned char")
-        else:
-            print("WARNING: Pixel size not supported!")
 
     if args.ref is not None:
         print(args.ref)

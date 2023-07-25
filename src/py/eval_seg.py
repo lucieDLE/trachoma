@@ -19,6 +19,7 @@ from scipy import interp
 import pandas as pd
 import SimpleITK as sitk
 import seaborn as sns
+import pickle 
 
 def plot_confusion_matrix(cm, classes,
                           normalize=False,
@@ -63,6 +64,8 @@ def main(args):
   y_pred_arr = []
   y_true_arr = []
   dice_arr = []
+  cnf_matrix_arr = []
+  cl_report_arr = []
 
   fpr_arr = []
   tpr_arr = []
@@ -78,16 +81,29 @@ def main(args):
 
   for i, row in df.iterrows():
 
-    print("Reading:", row["seg"])
-    y_true = sitk.GetArrayFromImage(sitk.ReadImage(row["seg"]))
-    print("Reading:", row["prediction"])
-    y_pred = sitk.GetArrayFromImage(sitk.ReadImage(row["prediction"]))
+    print("Reading:", row[args.seg_column])
+    y_true = sitk.GetArrayFromImage(sitk.ReadImage(row[args.seg_column]))
+    print("Reading:", row[args.pred_column])
+    y_pred = sitk.GetArrayFromImage(sitk.ReadImage(row[args.pred_column]))
+    if y_pred.shape[-1] == 4:
+      y_pred = np.argmax(y_pred, axis=-1)
 
     y_pred = np.reshape(y_pred, -1)
     y_true = np.reshape(y_true, -1)
 
-    y_pred_arr.extend(y_pred)
-    y_true_arr.extend(y_true)
+    cnf_matrix = confusion_matrix(y_true, y_pred)
+    cnf_matrix = cnf_matrix.astype('float') / cnf_matrix.sum(axis=1)[:, np.newaxis]
+    cnf_matrix_arr.append(cnf_matrix)
+
+    print(cnf_matrix)
+
+    cl_report = classification_report(y_true, y_pred, output_dict=True)
+    cl_report_arr.append(cl_report)
+
+    print(cl_report)
+
+    # y_pred_arr.extend(np.array(y_pred).astype(np.byte))
+    # y_true_arr.extend(np.array(y_true).astype(np.byte))
 
     jaccard = jaccard_score(y_true, y_pred, average=None)
     dice = 2.0*jaccard/(1.0 + jaccard)
@@ -98,50 +114,52 @@ def main(args):
       print("WTF!")
 
 
-  cnf_matrix = confusion_matrix(y_true_arr, y_pred_arr)
-  cnf_matrix = cnf_matrix.astype('float') / cnf_matrix.sum(axis=1)[:, np.newaxis]
-  print(cnf_matrix)
-  FP = cnf_matrix.sum(axis=0) - np.diag(cnf_matrix)  
-  FN = cnf_matrix.sum(axis=1) - np.diag(cnf_matrix)
-  TP = np.diag(cnf_matrix)
-  TN = cnf_matrix.sum() - (FP + FN + TP)
+  
+  # FP = cnf_matrix.sum(axis=0) - np.diag(cnf_matrix)  
+  # FN = cnf_matrix.sum(axis=1) - np.diag(cnf_matrix)
+  # TP = np.diag(cnf_matrix)
+  # TN = cnf_matrix.sum() - (FP + FN + TP)
 
-  # Sensitivity, hit rate, recall, or true positive rate
-  TPR = TP/(TP+FN)
-  # Specificity or true negative rate
-  TNR = TN/(TN+FP) 
-  # Precision or positive predictive value
-  PPV = TP/(TP+FP)
-  # Negative predictive value
-  NPV = TN/(TN+FN)
-  # Fall out or false positive rate
-  FPR = FP/(FP+TN)
-  # False negative rate
-  FNR = FN/(TP+FN)
-  # False discovery rate
-  FDR = FP/(TP+FP)
+  # # Sensitivity, hit rate, recall, or true positive rate
+  # TPR = TP/(TP+FN)
+  # # Specificity or true negative rate
+  # TNR = TN/(TN+FP) 
+  # # Precision or positive predictive value
+  # PPV = TP/(TP+FP)
+  # # Negative predictive value
+  # NPV = TN/(TN+FN)
+  # # Fall out or false positive rate
+  # FPR = FP/(FP+TN)
+  # # False negative rate
+  # FNR = FN/(TP+FN)
+  # # False discovery rate
+  # FDR = FP/(TP+FP)
 
-  # Overall accuracy
-  ACC = (TP+TN)/(TP+FP+FN+TN)
+  # # Overall accuracy
+  # ACC = (TP+TN)/(TP+FP+FN+TN)
 
-  print("True positive rate or sensitivity:", TPR)
-  print("True negative rate or specificity:", TNR)
-  print("Positive predictive value or precision:", PPV)
-  print("Negative predictive value:", NPV)
-  print("False positive rate or fall out", FPR)
-  print("False negative rate:", FNR)
-  print("False discovery rate:", FDR)
-  print("Overall accuracy:", ACC)
+  # print("True positive rate or sensitivity:", TPR)
+  # print("True negative rate or specificity:", TNR)
+  # print("Positive predictive value or precision:", PPV)
+  # print("Negative predictive value:", NPV)
+  # print("False positive rate or fall out", FPR)
+  # print("False negative rate:", FNR)
+  # print("False discovery rate:", FDR)
+  # print("Overall accuracy:", ACC)
 
-  print(classification_report(y_true_arr, y_pred_arr))
+  # print(classification_report(y_true_arr, y_pred_arr))
 
-  jaccard = jaccard_score(y_true_arr, y_pred_arr, average=None)
-  print("jaccard score:", jaccard)
-  print("dice:", 2.0*jaccard/(1.0 + jaccard))
+  # jaccard = jaccard_score(y_true_arr, y_pred_arr, average=None)
+  # print("jaccard score:", jaccard)
+  # print("dice:", 2.0*jaccard/(1.0 + jaccard))
+
+
+  pickle.dump(cl_report_arr, open(os.path.splitext(args.csv)[0] + "_classification_report.pickle", 'wb'))
+  pickle.dump(cnf_matrix_arr, open(os.path.splitext(args.csv)[0] + "_confucion_matrix.pickle", 'wb'))
 
 
   dice_arr = np.array(dice_arr)
-  print(dice_arr.shape)
+  print(dice_arr.shape)  
   
   fig3 = plt.figure() 
   # Creating plot
@@ -151,6 +169,9 @@ def main(args):
   s.set_title('Dice coefficients')
   violin_filename = os.path.splitext(args.csv)[0] + "_violin_plot.png"
   fig3.savefig(violin_filename)
+
+  df = pd.concat([df, pd.DataFrame(dice_arr)], axis=1)
+  df.to_csv(args.csv.replace('.csv', '_dice.csv'), index=False)
 
   # roc_fig = plt.figure()
   # lw = 3
@@ -198,6 +219,8 @@ if __name__ == "__main__":
 
   input_param_group = parser.add_argument_group('Input')
   input_param_group.add_argument('--csv', type=str, help='csv file columns seg,prediction', required=True)
+  input_param_group.add_argument('--seg_column', type=str, help='column name for segmentation', default='seg')
+  input_param_group.add_argument('--pred_column', type=str, help='column name for prediction', default='pred')
 
   args = parser.parse_args()
   main(args)
