@@ -20,6 +20,8 @@ import pickle
 from sklearn.metrics import classification_report
 from nets.classification import EfficientnetV2sStacks
 
+import glob
+
 class bcolors:
     HEADER = '\033[95m'
     OK = '\033[94m'
@@ -144,9 +146,17 @@ def main(args):
     if args.predict_model:
         model_predict = EfficientnetV2sStacks.load_from_checkpoint(args.predict_model)
 
-    if args.csv:
+    if args.dir:
+        images = []
+        for file_path in glob.glob(os.path.join(args.dir,'**', '*.jpg', recursive=True):
+            images.append(file_path)
+
+        df = pd.DataFrame({args.img_column: images})
+
+    if args.csv or args.dir:
         
-        df = pd.read_csv(args.csv)
+        if args.csv:
+            df = pd.read_csv(args.csv)
 
         for idx, row in df.iterrows():
             img = row[args.img_column]
@@ -185,7 +195,7 @@ def main(args):
         csv_split_ext = os.path.splitext(args.csv)
         out_csv = csv_split_ext[0] + "_seg_stack" + csv_split_ext[1]
         df.to_csv(out_csv, index=False)
-
+        
     else:
         img_out.append({'img': args.img, 'out': args.out})
 
@@ -268,6 +278,7 @@ if __name__ == '__main__':
     in_group = input_group.add_mutually_exclusive_group(required=True)
     in_group.add_argument('--img', type=str, help='Input image for prediction')
     in_group.add_argument('--csv', type=str, help='CSV file with images. Uses column name "image"')
+    in_group.add_argument('--dir', type=str, help='Directory with jpg images')
     parser.add_argument('--csv_root', type=str, help='Root path to replace for output', default=None)
     parser.add_argument('--img_column', type=str, help='Name of column in csv file', default="image")
     parser.add_argument('--class_column', type=str, help='Name of class column in csv file', default=None)
