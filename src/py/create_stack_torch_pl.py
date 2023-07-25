@@ -156,7 +156,7 @@ def main(args):
 
     if args.dir:
         images = []
-        for file_path in glob.glob(os.path.join(args.dir,'**', '*.jpg', recursive=True):
+        for file_path in glob.glob(os.path.join(args.dir,'**', '*.jpg', recursive=True)):
             images.append(file_path)
 
         df = pd.DataFrame({args.img_column: images})
