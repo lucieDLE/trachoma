@@ -36,7 +36,10 @@ class bcolors:
 
 def create_stack(img, model_seg, args):
 
-    device = torch.device("cuda:0")
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+    else:
+        device = torch.device("cpu")
 
     transforms_in = InTransformsSeg()
 
@@ -134,17 +137,22 @@ def create_stack(img, model_seg, args):
 
 def main(args): 
 
-    device = torch.device("cuda:0")
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+    else:
+        device = torch.device("cpu")
 
     model_seg = TTUNet.load_from_checkpoint(args.seg_model)
     model_seg.eval()
-    model_seg.cuda()
+    model_seg.to(device)
 
     img_out = []
 
     model_predict = None
     if args.predict_model:
         model_predict = EfficientnetV2sStacks.load_from_checkpoint(args.predict_model)
+        model_predict.eval()
+        model_predict.to(device)
 
     if args.dir:
         images = []
@@ -240,7 +248,7 @@ def main(args):
             out_stack = out_stack/255.0
             out_stack = out_stack.unsqueeze(dim=0)
             
-            x, x_a, x_s, x_v, x_v_p = model_predict(out_stack)
+            x, x_a, x_s, x_v, x_v_p = model_predict(out_stack.to(device))
 
             probs.append(x)       
             features.append(x_a)
