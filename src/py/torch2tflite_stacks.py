@@ -29,7 +29,7 @@ def main(args):
     model = EfficientnetV2sStacks(args).load_from_checkpoint(args.model)
     model.eval()
     model.cuda()
-    
+    quit()
     model_features = TTFeatures(model.F.module)
     model_features.eval()
     model_features.cuda()

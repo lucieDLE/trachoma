@@ -18,7 +18,7 @@ import pandas as pd
 import pickle
 
 from sklearn.metrics import classification_report
-from nets.classification import EfficientnetV2sStacks
+from nets.classification import EfficientnetV2sStacksDot
 
 import glob
 
@@ -37,7 +37,7 @@ class bcolors:
 def create_stack(img, model_seg, args):
 
     if torch.cuda.is_available():
-        device = torch.device("cuda:0")
+        device = torch.device("cuda")
     else:
         device = torch.device("cpu")
 
@@ -62,7 +62,8 @@ def create_stack(img, model_seg, args):
     img_resampled_np = sitk.GetArrayFromImage(img_resampled)
     
     img_resampled_np = transforms_in(img_resampled_np).to(device)    
-    seg_resampled_np = model_seg(img_resampled_np)        
+    with torch.no_grad():
+        seg_resampled_np = model_seg(img_resampled_np)        
     seg_resampled_np = transforms_out(seg_resampled_np)
 
     seg_resampled = sitk.GetImageFromArray(seg_resampled_np, isVector=True)
@@ -138,7 +139,7 @@ def create_stack(img, model_seg, args):
 def main(args): 
 
     if torch.cuda.is_available():
-        device = torch.device("cuda:0")
+        device = torch.device("cuda")
     else:
         device = torch.device("cpu")
 
@@ -150,18 +151,23 @@ def main(args):
 
     model_predict = None
     if args.predict_model:
-        model_predict = EfficientnetV2sStacks.load_from_checkpoint(args.predict_model)
+        model_predict = EfficientnetV2sStacksDot.load_from_checkpoint(args.predict_model)
         model_predict.eval()
         model_predict.to(device)
 
     if args.dir:
         images = []
-        for file_path in glob.glob(os.path.join(args.dir,'**', '*.jpg', recursive=True)):
+        for file_path in glob.glob(os.path.join(args.dir,'**', '*.jpg'), recursive=True)    :
             images.append(file_path)
 
         df = pd.DataFrame({args.img_column: images})
 
     if args.csv or args.dir:
+
+        if args.csv:
+            csv_fn = args.csv
+        else:
+            csv_fn = os.path.normpath(args.out)
         
         if args.csv:
             df = pd.read_csv(args.csv)
@@ -200,7 +206,8 @@ def main(args):
         df['seg'] = df_out['out_seg']
         df['stack'] = df_out['out']
 
-        csv_split_ext = os.path.splitext(args.csv)
+
+        csv_split_ext = os.path.splitext(csv_fn)
         out_csv = csv_split_ext[0] + "_seg_stack" + csv_split_ext[1]
         df.to_csv(out_csv, index=False)
         
@@ -208,10 +215,10 @@ def main(args):
         img_out.append({'img': args.img, 'out': args.out})
 
     probs = []
-    features = []
-    scores = []
-    features_v = []
-    features_v_p = []
+    # features = []
+    # scores = []
+    # features_v = []
+    # features_v_p = []
 
     for obj in img_out:
 
@@ -248,32 +255,34 @@ def main(args):
             out_stack = out_stack/255.0
             out_stack = out_stack.unsqueeze(dim=0)
             
-            x, x_a, x_s, x_v, x_v_p = model_predict(out_stack.to(device))
+            with torch.no_grad():
+                x = model_predict(out_stack.to(device)).detach()
+            # x, x_a, x_s, x_v, x_v_p = model_predict(out_stack.to(device))
 
             probs.append(x)       
-            features.append(x_a)
-            scores.append(x_s)
-            features_v.append(x_v)
-            features_v_p.append(x_v_p)
+            # features.append(x_a)
+            # scores.append(x_s)
+            # features_v.append(x_v)
+            # features_v_p.append(x_v_p)
 
     if model_predict:
         probs = torch.cat(probs, dim=0)
         predictions = torch.argmax(probs, dim=1)
 
-        features = torch.cat(features, dim=0).cpu().numpy()
-        scores = torch.cat(scores, dim=0).cpu().numpy()
-        features_v = torch.cat(features_v, dim=0).cpu().numpy()
-        features_v_p = torch.cat(features_v_p, dim=0).cpu().numpy()
+        # features = torch.cat(features, dim=0).cpu().numpy()
+        # scores = torch.cat(scores, dim=0).cpu().numpy()
+        # features_v = torch.cat(features_v, dim=0).cpu().numpy()
+        # features_v_p = torch.cat(features_v_p, dim=0).cpu().numpy()
 
-        probs = probs.cpu().numpy()
+        # probs = probs.cpu().numpy()
         df["pred"] = predictions.cpu().numpy()
 
         if args.class_column:
             print(classification_report(df[args.class_column], df["pred"]))
 
-        df.to_csv(args.csv.replace(".csv", "_prediction.csv"), index=False)
+        df.to_csv(os.path.splitext(csv_fn)[0] + "_prediction.csv", index=False)
         
-        pickle.dump((probs, features, scores, features_v, features_v_p), open(args.csv.replace(".csv", "_features.pickle"), 'wb'))
+        # pickle.dump((probs, features, scores, features_v, features_v_p), open(os.path.splitext(csv_fn)[0] + "_features.pickle", 'wb'))
             
 
 
@@ -293,7 +302,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--seg_model', type=str, help='Segmentation torch model', default='/work/jprieto/data/remote/EGower/jprieto/train/Analysis_Set_202208/segmentation_unet/v3/epoch=490-val_loss=0.07.ckpt')
 
-    parser.add_argument('--predict_model', type=str, help='Stack predict model', default='')
+    parser.add_argument('--predict_model', type=str, help='Stack predict model', default=None)
 
     parser.add_argument('--stack_size', type=int, help='Size w/h of the image stacks/frames', default=768)  
     parser.add_argument('--stack_samples', type=int, help='Stack samples', default=16)  

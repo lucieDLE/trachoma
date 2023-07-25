@@ -55,16 +55,18 @@ class TTUNet(pl.LightningModule):
         super(TTUNet, self).__init__()        
         
         self.save_hyperparameters()
-            
-        # self.loss = monai.losses.DiceLoss(include_background=False, softmax=True, to_onehot_y=True)
-        self.loss = monai.losses.DiceCELoss(include_background=False, to_onehot_y=True, softmax=True, 
-            ce_weight=torch.tensor([0.1, 1, 1, 4]), lambda_dice=1.0, lambda_ce=1.0)
 
-        self.accuracy = torchmetrics.Accuracy()
+        if hasattr(self.hparams, "ce_weight"):
+            self.loss = monai.losses.DiceCELoss(include_background=False, to_onehot_y=True, softmax=True, ce_weight=torch.tensor(self.hparams.ce_weight), lambda_dice=1.0, lambda_ce=1.0)
+        else:
+            self.loss = monai.losses.DiceLoss(include_background=False, softmax=True, to_onehot_y=True)
+        
+
+        self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.hparams.out_channels)
 
         self.model = monai.networks.nets.UNet(spatial_dims=2, in_channels=3, out_channels=self.hparams.out_channels, channels=(16, 32, 64, 128, 256, 512, 1024), strides=(2, 2, 2, 2, 2, 2), num_res_units=4)
 
-        # self.metric = DiceMetric(include_background=True, reduction="mean")   
+        self.metric = DiceMetric(include_background=True, reduction="mean")   
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)

@@ -377,17 +377,13 @@ class EfficientnetV2sStacksDot(pl.LightningModule):
             class_weights = torch.tensor(class_weights).to(torch.float32)
             
         self.loss = nn.CrossEntropyLoss(weight=class_weights)
-        self.accuracy = torchmetrics.Accuracy()
+        self.accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=self.hparams.out_features)
 
         self.F = TimeDistributed(self.model_patches)
 
         self.V = nn.Sequential(nn.Linear(1536, 256), nn.ReLU(), nn.Linear(256, 1536))
-        # self.V = nn.Linear(in_features=1536, out_features=256)
-        # self.A = Attention(1536, 128)
         self.A = DotProductAttention()
-        # self.A = SigDotProductAttention()
         self.P = nn.Linear(in_features=1536, out_features=out_features)
-        
         
         self.softmax = nn.Softmax(dim=1)
 
