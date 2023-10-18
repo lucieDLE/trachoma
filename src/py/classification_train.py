@@ -7,7 +7,7 @@ import numpy as np
 
 import torch
 
-from nets.classification import EfficientnetV2s, MobileNetV2
+from nets import classification
 from loaders.tt_dataset import TTDataModule, TrainTransforms, EvalTransforms
 
 from pytorch_lightning import Trainer
@@ -37,9 +37,13 @@ def main(args):
     # valid_fn = os.path.join(args.mount_point, 'Analysis_Set_20220422', 'trachoma_bsl_mtss_besrat_field_patches_train_20220422_clean_eval.csv')
     # test_fn = os.path.join(args.mount_point, 'Analysis_Set_20220422', 'trachoma_bsl_mtss_besrat_field_patches_test_20220422.csv')
 
-    train_fn = os.path.join(args.mount_point, 'Analysis_Set_202208', 'trachoma_bsl_mtss_besrat_field_patches_train_202208_train.csv')
-    valid_fn = os.path.join(args.mount_point, 'Analysis_Set_202208', 'trachoma_bsl_mtss_besrat_field_patches_train_202208_eval.csv')
-    test_fn = os.path.join(args.mount_point, 'Analysis_Set_202208', 'trachoma_bsl_mtss_besrat_field_patches_test_202208.csv')
+    # train_fn = os.path.join(args.mount_point, 'Analysis_Set_202208', 'trachoma_bsl_mtss_besrat_field_patches_train_202208_train.csv')
+    # valid_fn = os.path.join(args.mount_point, 'Analysis_Set_202208', 'trachoma_bsl_mtss_besrat_field_patches_train_202208_eval.csv')
+    # test_fn = os.path.join(args.mount_point, 'Analysis_Set_202208', 'trachoma_bsl_mtss_besrat_field_patches_test_202208.csv')
+
+    train_fn = args.csv_train
+    valid_fn = args.csv_valid
+    test_fn = args.csv_test
 
     df_train = pd.read_csv(train_fn)
     df_train.drop(df_train[df_train['patch_class'].isin(['Probable Epilation', 'Probable TT', 'Unknown'])].index, inplace = True)
@@ -49,7 +53,7 @@ def main(args):
     # print(df_train["patch_class"])
     # print(unique_classes)
     # unique_class_weights = np.array(class_weight.compute_class_weight(class_weight='balanced', classes=unique_classes, y=df_train["patch_class"]))
-    unique_class_weights = np.array(class_weight.compute_class_weight(class_weight={0: 1, 1: 4, 2: 8}, classes=unique_classes, y=df_train["patch_class"]))
+    unique_class_weights = np.array(class_weight.compute_class_weight(class_weight='balanced', classes=unique_classes, y=df_train["patch_class"]))
     
 
     class_replace = {}
@@ -70,7 +74,7 @@ def main(args):
     # df_test["patch_class"] = df_test["patch_class"].replace(class_replace)
 
     
-    ttdata = TTDataModule(df_train, df_val, df_test, batch_size=args.batch_size, num_workers=args.num_workers, img_column='image', class_column="patch_class")
+    ttdata = TTDataModule(df_train, df_val, df_test, batch_size=args.batch_size, num_workers=args.num_workers, img_column='image', class_column="patch_class", mount_point=args.mount_point)
 
 
     checkpoint_callback = ModelCheckpoint(
@@ -80,14 +84,19 @@ def main(args):
         monitor='val_loss'
     )
 
-    if args.nn == "efficientnet_v2s":
-        model = EfficientnetV2s(args, out_features=unique_classes.shape[0], class_weights=unique_class_weights)
-    elif args.nn == "mobilenet_v2":
-        model = MobileNetV2(args, out_features=unique_classes.shape[0], class_weights=unique_class_weights)
+    args_params = vars(args)
+
+    unique_classes = np.sort(np.unique(df_train["patch_class"]))
+    args_params['class_weights'] = unique_class_weights
+    args_params['out_features'] = len(unique_classes)
+    
+
+    NN = getattr(classification, args.nn)
+    model = NN(**args_params)
 
     # model.model.load_state_dict(torch.load("/work/jprieto/data/trachoma/train/train_patch_mobilnet_v2_torch/Analysis_Set_202208/patches_qat/epoch=76-val_loss=0.11.pt"))
     
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=30, verbose=True, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=args.patience, verbose=True, mode="min")
 
     if args.tb_dir:
         logger = TensorBoardLogger(save_dir=args.tb_dir, name=args.tb_name)    
@@ -129,18 +138,28 @@ if __name__ == '__main__':
 
 
     parser = argparse.ArgumentParser(description='TT classification Training')
-    parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='Learning rate')
-    parser.add_argument('--model', help='Model path to continue training', type=str, default=None)
-    parser.add_argument('--epochs', help='Max number of epochs', type=int, default=200)    
-    parser.add_argument('--log_every_n_steps', help='Log every n steps', type=int, default=50)    
-    parser.add_argument('--out', help='Output', type=str, default="./")
-    parser.add_argument('--mount_point', help='Dataset mount directory', type=str, default="./")
-    parser.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    parser.add_argument('--batch_size', help='Batch size', type=int, default=256)
-    parser.add_argument('--nn', help='Type of neural network', type=str, default="efficientnet_v2s")    
-    parser.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default=None)
-    parser.add_argument('--tb_name', help='Tensorboard experiment name', type=str, default="classification_efficientnet_v2s")
+    input_group = parser.add_argument_group('Input')
+    input_group.add_argument('--csv_train', required=True, type=str, help='Train CSV')
+    input_group.add_argument('--csv_valid', required=True, type=str, help='Valid CSV')
+    input_group.add_argument('--csv_test', required=True, type=str, help='Test CSV')
+    input_group.add_argument('--model', help='Model path to continue training', type=str, default=None)
+    input_group.add_argument('--mount_point', help='Dataset mount directory', type=str, default="./")
+    input_group.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
 
+    hparams_group = parser.add_argument_group('Hyperparameters')
+    hparams_group.add_argument('--lr', '--learning-rate', default=1e-4, type=float, help='Learning rate')
+    hparams_group.add_argument('--epochs', help='Max number of epochs', type=int, default=200)    
+    hparams_group.add_argument('--batch_size', help='Batch size', type=int, default=256)
+    hparams_group.add_argument('--nn', help='Type of neural network', type=str, default="efficientnet_v2s")    
+    hparams_group.add_argument('--patience', help='Max number of patience steps for EarlyStopping', type=int, default=30)
+
+    logger_group = parser.add_argument_group('Logger')
+    logger_group.add_argument('--log_every_n_steps', help='Log every n steps', type=int, default=50)    
+    logger_group.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default=None)
+    logger_group.add_argument('--tb_name', help='Tensorboard experiment name', type=str, default="classification_efficientnet_v2s")
+    
+    output_group = parser.add_argument_group('Output')
+    output_group.add_argument('--out', help='Output', type=str, default="./")
 
     args = parser.parse_args()
 

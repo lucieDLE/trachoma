@@ -203,7 +203,7 @@ if __name__ == '__main__':
 
     output_group = parser.add_argument_group('Output parameters')
     output_group.add_argument('--out_seg', type=str, help='Output seg dir', default=None) 
-    output_group.add_argument('--out_seg_res', type=str, help='Output seg dir', default=None)     
+    output_group.add_argument('--out_seg_res', type=str, help='Output seg dir resampled', default=None)     
     output_group.add_argument('--ow', type=bool, help='Overwrite outputs', default=False)    
 
     args = parser.parse_args()

@@ -60,6 +60,15 @@ def main(args):
     NN = getattr(classification, args.nn)
     model = NN(**args_params)
 
+    if args.model_feat:
+        NN = getattr(classification, args.model_feat_nn)
+        model_feat = NN.load_from_checkpoint(args.model_feat)
+        model_feat = model_feat.get_feat_model()
+        if args.model_feat_freeze:
+            print("Freezing...")
+            for param in model_feat.parameters():
+                param.requires_grad = False
+        model.set_feat_model(model_feat)
     train_transform = TrainTransformsFullSeg()
     eval_transform = EvalTransformsFullSeg()
 
@@ -110,6 +119,9 @@ if __name__ == '__main__':
 
     input_group = parser.add_argument_group('Input')
     input_group.add_argument('--model', help='Model to continue training', type=str, default= None)
+    input_group.add_argument('--model_feat', help='Feature model pretrained with patches', type=str, default= None)
+    input_group.add_argument('--model_feat_nn', help='Type of model', type=str, default= None)
+    input_group.add_argument('--model_feat_freeze', help='Freeze the feature model', type=int, default= 0)
     input_group.add_argument('--mount_point', help='Dataset mount directory', type=str, default="./")    
     input_group.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
     input_group.add_argument('--csv_train', required=True, type=str, help='Train CSV')

@@ -12,51 +12,52 @@ from torch import nn
 from torch.utils.mobile_optimizer import optimize_for_mobile
 
 import tensorflow as tf 
-
+tf.config.optimizer.set_jit(True)
 
 import argparse
 
 import os
 import numpy as np 
 
-from nets.classification import EfficientnetV2s, EfficientnetV2sStacks, TTFeatures, TTPrediction, TTStacks
+from nets.classification import EfficientnetV2s, EfficientnetV2sStacks, EfficientnetV2sStacksDot, TTFeatures, TTPrediction, TTStacks
 import pickle
 
 def main(args):
 
     model_path = args.model     
 
-    model = EfficientnetV2sStacks(args).load_from_checkpoint(args.model)
+    model = EfficientnetV2sStacksDot.load_from_checkpoint(args.model)
     model.eval()
-    model.cuda()
-    quit()
+    # model.cuda()
+    # print(model)
+    # quit()
     model_features = TTFeatures(model.F.module)
     model_features.eval()
-    model_features.cuda()
+    # model_features.cuda()
 
-    model_full = TTStacks()
-    model_full.F = model.F
-    model_full.V = model.V
-    model_full.A = model.A
-    model_full.P = model.P
-    model_full.eval()
-    model_full.cuda()
+    # model_full = TTStacks()
+    # model_full.F = model.F
+    # model_full.V = model.V
+    # model_full.A = model.A
+    # model_full.P = model.P
+    # model_full.eval()
+    # model_full.cuda()
 
     with torch.no_grad():
 
-        x = torch.randn(1, 16, 3, 448, 448, dtype=torch.float32).cuda()
+        # x = torch.randn(1, 16, 3, 448, 448, dtype=torch.float32).cuda()
         
-        torch_out = model_full(x)
+        # torch_out = model_full(x)
 
         # model_features_script_module = torch.jit.trace(model_features, x)
-        model_full_traced = torch.jit.trace(model_full, x)
-        model_full_traced_optimized = optimize_for_mobile(model_full_traced)
-        model_full_traced_optimized._save_for_lite_interpreter(model_path.replace(".ckpt", "_full.ptl"))
+        # model_full_traced = torch.jit.trace(model_full, x)
+        # model_full_traced_optimized = optimize_for_mobile(model_full_traced)
+        # model_full_traced_optimized._save_for_lite_interpreter(model_path.replace(".ckpt", "_full.ptl"))
 
 
         #Input to the model
         # model_features_script_module = torch.jit.trace(model_features, x)
-        model_features_traced = torch.jit.trace(model.F.module, torch.randn(1, 3, 448, 448, dtype=torch.float32).cuda())
+        model_features_traced = torch.jit.trace(model.F.module, torch.randn(1, 3, 448, 448, dtype=torch.float32))
         model_features_traced_optimized = optimize_for_mobile(model_features_traced)
         model_features_traced_optimized._save_for_lite_interpreter(model_path.replace(".ckpt", "_features.ptl"))
 
@@ -64,7 +65,7 @@ def main(args):
         onnx_model_path = model_path.replace(".ckpt", "_features.onnx")
 
         batch_size = 1
-        x = torch.randn(1, 448, 448, 3, dtype=torch.float32).cuda()
+        x = torch.randn(1, 448, 448, 3, dtype=torch.float32)
         torch_out = model_features(x)
 
         model_features_traced = torch.jit.trace(model_features, x)
@@ -80,7 +81,7 @@ def main(args):
 
 
         onnx_model = onnx.load(onnx_model_path)
-        tf_rep = prepare(onnx_model, device='CUDA', logging_level='DEBUG')
+        tf_rep = prepare(onnx_model, logging_level='DEBUG')
         tf_model_path = onnx_model_path.replace('.onnx', '_saved_model')
         tf_rep.export_graph(tf_model_path)
 
@@ -88,10 +89,9 @@ def main(args):
         # out = tf_model(input=tf.random.normal((1, 448, 448, 3)))
         # print(out)
         # Convert the model
+
         converter = tf.lite.TFLiteConverter.from_saved_model(tf_model_path)
         converter.optimizations = [tf.lite.Optimize.DEFAULT]
-        # converter.target_spec.supported_types = [tf.float16]
-        # converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS, tf.lite.OpsSet.SELECT_TF_OPS]
         target_spec = tf.lite.TargetSpec()
         target_spec.supported_ops = [
             tf.lite.OpsSet.TFLITE_BUILTINS,
@@ -102,6 +102,7 @@ def main(args):
 
         converter.target_spec = target_spec
 
+        print("Converting features!")
         tflite_model = converter.convert()
 
         tflite_model_path = tf_model_path + '.tflite'
@@ -116,7 +117,7 @@ def main(args):
 
         model_prediction.eval()
 
-        x = torch.randn(1, 16, 1536, dtype=torch.float32).cuda()
+        x = torch.randn(1, 16, 1536, dtype=torch.float32)
         
         torch_out = model_prediction(x)
         # print(torch_out[0].shape, torch_out[1].shape)

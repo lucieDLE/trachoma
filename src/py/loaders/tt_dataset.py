@@ -161,7 +161,7 @@ class TTDataModuleSeg(pl.LightningDataModule):
             df_train = g.apply(lambda x: x.sample(g.size().min())).reset_index(drop=True).sample(frac=1).reset_index(drop=True)
             self.train_ds = monai.data.Dataset(data=TTDatasetSeg(df_train, mount_point=self.mount_point, img_column=self.img_column, seg_column=self.seg_column, class_column=self.class_column), transform=self.train_transform)            
 
-        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=self.drop_last, collate_fn=pad_list_data_collate, shuffle=True, prefetch_factor=8)
+        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=self.drop_last, collate_fn=pad_list_data_collate, shuffle=True, prefetch_factor=4)
 
     def val_dataloader(self):
         return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=self.drop_last, collate_fn=pad_list_data_collate)

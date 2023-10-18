@@ -12,8 +12,7 @@ from torchvision import transforms
 from torchvision import ops
 import torchmetrics
 
-from monai.networks.nets import AutoEncoder
-from monai.networks.blocks import Convolution
+import monai
 
 import pytorch_lightning as pl
 
@@ -152,6 +151,287 @@ class EfficientnetV2s(pl.LightningModule):
         self.accuracy(x, y)
         self.log("val_acc", self.accuracy)
 
+class AveragePool1D(nn.Module):
+    def __init__(self, dim=1):
+        super(AveragePool1D, self).__init__()
+        self.dim = dim
+    def forward(self, x: Tensor) -> Tensor:
+        return torch.mean(x, dim=self.dim)
+
+class Resnet50(pl.LightningModule):
+    def __init__(self, **kwargs):
+        super(Resnet50, self).__init__()        
+        
+        self.save_hyperparameters()
+
+        class_weights = None
+        if hasattr(self.hparams, "class_weights"):
+            class_weights = torch.tensor(self.hparams.class_weights).to(torch.float32)
+            
+        self.loss = nn.CrossEntropyLoss(weight=class_weights)
+        self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.hparams.out_features)
+        
+        feat = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
+        feat.fc = nn.Identity()
+
+        # self.feat = TimeDistributed(feat)
+        # self.pool = AveragePool1D(dim=1)
+        # self.pred = nn.Linear(2048, self.hparams.out_features)
+
+        self.model = nn.Sequential(
+            TimeDistributed(feat), 
+            AveragePool1D(dim=1),
+            nn.Linear(2048, self.hparams.out_features)
+        )
+        
+        self.softmax = nn.Softmax(dim=1)
+
+        self.train_transform = torch.nn.Sequential(      
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            transforms.RandomResizedCrop(512, scale=(0.2, 1.0)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(degrees=90),
+            transforms.RandomApply([transforms.ColorJitter(brightness=0.8, contrast=0.8, saturation=0.8, hue=0.2)], p=0.5),
+            transforms.RandomApply([transforms.GaussianBlur(5, sigma=(0.1, 2.0))], p=0.5),
+            transforms.RandomApply([GaussianNoise(0.0, 0.02)], p=0.5)    
+        )
+
+        self.test_transform = torch.nn.Sequential(    
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),        
+            transforms.CenterCrop(512)
+        )
+
+    def extract_patches(self, img):
+        # Calculate the dimensions of each patch
+        patch_width = 256
+        patch_height = 256
+        patches = []
+
+        # Slide a window over the region of interest and extract patches
+        for j in range(0, 512, patch_height):
+            for i in range(0, 512, patch_width): 
+                patch = img[:, j:j+patch_height, i:i+patch_width]
+                patches.append(patch)
+
+        return torch.stack(patches)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
+        return optimizer
+
+    def forward(self, x):
+        x = torch.stack([self.extract_patches(img) for img in x])
+        x = self.model(x)
+        return x
+
+    def training_step(self, train_batch, batch_idx):
+        x, y = train_batch        
+        
+        x = self.train_transform(x)
+        
+        x = self(x)
+
+        loss = self.loss(x, y)
+        
+        self.log('train_loss', loss)
+
+        self.accuracy(x, y)
+        self.log("train_acc", self.accuracy)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        x, y = val_batch
+        
+        x = self.test_transform(x)
+        
+        x = self(x)
+        
+        loss = self.loss(x, y)
+        
+        self.log('val_loss', loss, sync_dist=True)
+        self.accuracy(x, y)
+        self.log("val_acc", self.accuracy, sync_dist=True)
+
+class SEResNext101(pl.LightningModule):
+    def __init__(self, **kwargs):
+        super(SEResNext101, self).__init__()        
+        
+        self.save_hyperparameters()
+
+        class_weights = None
+        if hasattr(self.hparams, "class_weights"):
+            class_weights = torch.tensor(self.hparams.class_weights).to(torch.float32)
+            
+        self.loss = nn.CrossEntropyLoss(weight=class_weights)
+        self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.hparams.out_features)
+        
+        feat = monai.networks.nets.SEResNext101(spatial_dims=2, in_channels=3, pretrained=True)
+        feat.last_linear = nn.Identity()
+
+        # self.feat = TimeDistributed(feat)
+        # self.pool = AveragePool1D(dim=1)
+        # self.pred = nn.Linear(2048, self.hparams.out_features)
+
+        self.model = nn.Sequential(
+            TimeDistributed(feat), 
+            AveragePool1D(dim=1),
+            nn.Linear(2048, self.hparams.out_features)
+        )
+        
+        self.softmax = nn.Softmax(dim=1)
+
+        self.train_transform = torch.nn.Sequential(
+            transforms.RandomResizedCrop(512, scale=(0.2, 1.0)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(degrees=90),
+            transforms.RandomApply([transforms.ColorJitter(brightness=0.8, contrast=0.8, saturation=0.8, hue=0.2)], p=0.5),
+            transforms.RandomApply([transforms.GaussianBlur(5, sigma=(0.1, 2.0))], p=0.5),
+            transforms.RandomApply([GaussianNoise(0.0, 0.02)], p=0.5)    
+        )
+
+        self.test_transform = torch.nn.Sequential(
+            transforms.CenterCrop(512)
+        )
+
+    def extract_patches(self, img):
+        # Calculate the dimensions of each patch
+        patch_width = 256
+        patch_height = 256
+        patches = []
+
+        # Slide a window over the region of interest and extract patches
+        for j in range(0, 512, patch_height):
+            for i in range(0, 512, patch_width): 
+                patch = img[:, j:j+patch_height, i:i+patch_width]
+                patches.append(patch)
+
+        return torch.stack(patches)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
+        return optimizer
+
+    def forward(self, x):
+        x = torch.stack([self.extract_patches(img) for img in x])
+        x = self.model(x)
+        return x
+
+    def training_step(self, train_batch, batch_idx):
+        x, y = train_batch        
+        
+        x = self.train_transform(x)
+        
+        x = self(x)
+
+        loss = self.loss(x, y)
+        
+        self.log('train_loss', loss)
+
+        self.accuracy(x, y)
+        self.log("train_acc", self.accuracy)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        x, y = val_batch
+        
+        x = self.test_transform(x)
+        
+        x = self(x)
+        
+        loss = self.loss(x, y)
+        
+        self.log('val_loss', loss, sync_dist=True)
+        self.accuracy(x, y)
+        self.log("val_acc", self.accuracy, sync_dist=True)
+
+class SEResNext101_V2(pl.LightningModule):
+    def __init__(self, **kwargs):
+        super(SEResNext101_V2, self).__init__()        
+        
+        self.save_hyperparameters()
+
+        class_weights = None
+        if hasattr(self.hparams, "class_weights"):
+            class_weights = torch.tensor(self.hparams.class_weights).to(torch.float32)
+            
+        self.loss = nn.CrossEntropyLoss(weight=class_weights)
+        self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.hparams.out_features)
+        
+        feat = monai.networks.nets.SEResNext101(spatial_dims=2, in_channels=3, pretrained=True)
+
+        # self.feat = TimeDistributed(feat)
+        # self.pool = AveragePool1D(dim=1)
+        # self.pred = nn.Linear(2048, self.hparams.out_features)
+
+        self.model = nn.Sequential(
+            feat.layer0,
+            feat.layer1,
+            feat.layer2,
+            feat.layer3,
+            feat.layer4,
+            ops.Conv2dNormActivation(2048, 1536),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(start_dim=1),
+            nn.Sequential(
+                nn.Dropout(p=0.2, inplace=True),
+                nn.Linear(in_features=1536, out_features=self.hparams.out_features, bias=True)
+                )
+        )
+        
+        self.softmax = nn.Softmax(dim=1)
+
+        self.train_transform = torch.nn.Sequential(
+            transforms.RandomResizedCrop(448, scale=(0.2, 1.0)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(degrees=90),
+            transforms.RandomApply([transforms.ColorJitter(brightness=0.8, contrast=0.8, saturation=0.8, hue=0.2)], p=0.5),
+            transforms.RandomApply([transforms.GaussianBlur(5, sigma=(0.1, 2.0))], p=0.5),
+            transforms.RandomApply([GaussianNoise(0.0, 0.02)], p=0.5)    
+        )
+
+        self.test_transform = torch.nn.Sequential(
+            transforms.CenterCrop(448)
+        )
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
+        return optimizer
+
+    def forward(self, x):
+        x = self.model(x)
+        return x
+    
+    def get_feat_model(self):
+        return self.model[0:-1]
+
+    def training_step(self, train_batch, batch_idx):
+        x, y = train_batch        
+        
+        x = self.train_transform(x)
+        
+        x = self(x)
+
+        loss = self.loss(x, y)
+        
+        self.log('train_loss', loss)
+
+        self.accuracy(x, y)
+        self.log("train_acc", self.accuracy)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        x, y = val_batch
+        
+        x = self.test_transform(x)
+        
+        x = self(x)
+        
+        loss = self.loss(x, y)
+        
+        self.log('val_loss', loss, sync_dist=True)
+        self.accuracy(x, y)
+        self.log("val_acc", self.accuracy, sync_dist=True)
+
 class DotProductAttention(nn.Module):
     def __init__(self):
         super(DotProductAttention, self).__init__()
@@ -199,6 +479,21 @@ class Attention(nn.Module):
         context_vector = torch.sum(context_vector, dim=1)
 
         return context_vector, score
+    
+class AttentionLinear(nn.Module):
+    def __init__(self, in_units, out_units):
+        super(AttentionLinear, self).__init__()
+        self.flatten = nn.Flatten(start_dim=1)
+        self.W = nn.Linear(in_units, out_units)
+        self.activation = nn.SiLU()
+
+    def forward(self, x):
+        
+        x = self.flatten(x)
+        x = self.W(x)
+        x = self.activation(x)
+
+        return x
 
 class TimeDistributed(nn.Module):
     def __init__(self, module):
@@ -1371,6 +1666,280 @@ class ResnetSigDotYOLT(pl.LightningModule):
         x_v = self.V(x_f)
         x_a, x_s = self.A(x_f, x_v)
         x = self.P(x_a)
+
+        return x, X_patches
+
+    def training_step(self, train_batch, batch_idx):
+
+        Y = train_batch["class"]
+
+        x, _ = self(self.train_transform(train_batch))
+        
+        loss = self.loss(x, Y)
+        
+        self.log('train_loss', loss)
+
+        self.accuracy(x, Y)
+        self.log("train_acc", self.accuracy)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+
+        Y = val_batch["class"]
+
+        x, _ = self(val_batch)
+        
+        loss = self.loss(x, Y)
+        
+        self.log('val_loss', loss, sync_dist=True)
+
+        self.accuracy(x, Y)
+        self.log("val_acc", self.accuracy, sync_dist=True)
+
+    def test_step(self, test_batch, batch_idx):
+        Y = test_batch["class"]
+
+        x, _ = self(test_batch)
+        
+        loss = self.loss(x, Y)
+        
+        self.log('test_loss', loss, sync_dist=True)
+
+        self.accuracy(x, Y)
+        self.log("test_acc", self.accuracy, sync_dist=True)
+
+
+class SEResNext101YOLT(pl.LightningModule):
+    def __init__(self, **kwargs):
+        super(SEResNext101YOLT, self).__init__()        
+        
+        self.save_hyperparameters()
+
+        class_weights = None
+        if hasattr(self.hparams, "class_weights"):
+            class_weights = torch.tensor(self.hparams.class_weights).to(torch.float32)
+            
+        self.loss = nn.CrossEntropyLoss(weight=class_weights)
+        self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.hparams.out_features)
+
+
+        feat = monai.networks.nets.SEResNext101(spatial_dims=2, in_channels=3, pretrained=True)
+
+        model_feat = nn.Sequential(
+            feat.layer0,
+            feat.layer1,
+            feat.layer2,
+            feat.layer3,
+            feat.layer4,
+            ops.Conv2dNormActivation(2048, 1536),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(start_dim=1)
+        )
+        self.F = TimeDistributed(model_feat)
+        
+        self.V = nn.Linear(in_features=1536, out_features=256)
+        self.A = Attention(1536, 128)
+        # self.A = DotProductAttention()
+        # self.A = SigDotProductAttention()
+        self.P = nn.Linear(in_features=256, out_features=self.hparams.out_features)        
+        
+        self.softmax = nn.Softmax(dim=1)
+
+        self.resize = transforms.Resize(self.hparams.patch_size)
+
+        self.train_transform = transforms.Compose(
+            [
+                RandomRotate(degrees=90, keys=["img", "seg"], interpolation=[transforms.functional.InterpolationMode.NEAREST, transforms.functional.InterpolationMode.NEAREST], prob=0.5), 
+                RandomFlip(keys=["img", "seg"], prob=0.5)
+            ]
+        )
+    def set_feat_model(self, model_feat):
+        self.F.module = model_feat
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
+        return optimizer
+    
+    def compute_bb(self, seg, label=3, pad=0):
+    
+        shape = seg.shape[1:]
+        
+        ij = torch.argwhere(seg.squeeze() == label)
+
+        bb = torch.tensor([0, 0, 0, 0])# xmin, ymin, xmax, ymax
+
+        bb[0] = torch.clip(torch.min(ij[:,1]) - shape[1]*pad, 0, shape[1])
+        bb[1] = torch.clip(torch.min(ij[:,0]) - shape[0]*pad, 0, shape[0])
+        bb[2] = torch.clip(torch.max(ij[:,1]) + shape[1]*pad, 0, shape[1])
+        bb[3] = torch.clip(torch.max(ij[:,0]) + shape[0]*pad, 0, shape[0])
+        
+        return bb
+    
+    def extract_patches(self, img, bb, N=3):
+        # Calculate the dimensions of the region of interest
+        xmin, ymin, xmax, ymax = bb
+
+        width = xmax - xmin
+        height = ymax - ymin
+
+        # Calculate the dimensions of each patch
+        patch_width = torch.div(width, N, rounding_mode='floor')
+        patch_height = torch.div(height, N, rounding_mode='floor')
+        patches = []
+
+        # Slide a window over the region of interest and extract patches
+        for j in range(ymin, ymax-patch_height+1, patch_height):
+            for i in range(xmin, xmax-patch_width+1, patch_width): 
+                patch = img[:, j:j+patch_height, i:i+patch_width]
+                patches.append(patch)
+
+        return self.resize(torch.stack(patches))
+
+    def forward(self, X):
+        
+        x_bb = torch.stack([self.compute_bb(seg, pad=self.hparams.pad) for seg in X["seg"]])
+        X_patches = torch.stack([self.extract_patches(img, bb, N=self.hparams.num_patches) for img, bb in zip(X["img"], x_bb)])
+
+        x_f = self.F(X_patches)
+        x_v = self.V(x_f)
+        x_a, x_s = self.A(x_f, x_v)
+        x = self.P(x_a)
+
+        return x, X_patches
+
+    def training_step(self, train_batch, batch_idx):
+
+        Y = train_batch["class"]
+
+        x, _ = self(self.train_transform(train_batch))
+        
+        loss = self.loss(x, Y)
+        
+        self.log('train_loss', loss)
+
+        self.accuracy(x, Y)
+        self.log("train_acc", self.accuracy)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+
+        Y = val_batch["class"]
+
+        x, _ = self(val_batch)
+        
+        loss = self.loss(x, Y)
+        
+        self.log('val_loss', loss, sync_dist=True)
+
+        self.accuracy(x, Y)
+        self.log("val_acc", self.accuracy, sync_dist=True)
+
+    def test_step(self, test_batch, batch_idx):
+        Y = test_batch["class"]
+
+        x, _ = self(test_batch)
+        
+        loss = self.loss(x, Y)
+        
+        self.log('test_loss', loss, sync_dist=True)
+
+        self.accuracy(x, Y)
+        self.log("test_acc", self.accuracy, sync_dist=True)
+
+
+class SEResNext101YOLTv2(pl.LightningModule):
+    def __init__(self, **kwargs):
+        super(SEResNext101YOLTv2, self).__init__()        
+        
+        self.save_hyperparameters()
+
+        class_weights = None
+        if hasattr(self.hparams, "class_weights"):
+            class_weights = torch.tensor(self.hparams.class_weights).to(torch.float32)
+            
+        self.loss = nn.CrossEntropyLoss(weight=class_weights)
+        self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.hparams.out_features)
+
+
+        feat = monai.networks.nets.SEResNext101(spatial_dims=2, in_channels=3, pretrained=True)
+
+        model_feat = nn.Sequential(
+            feat.layer0,
+            feat.layer1,
+            feat.layer2,
+            feat.layer3,
+            feat.layer4,
+            ops.Conv2dNormActivation(2048, 1536),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(start_dim=1)
+        )
+        self.F = TimeDistributed(model_feat)
+        
+        self.V = nn.Linear(in_features=1536, out_features=64)
+        self.A = AttentionLinear(64*self.hparams.num_patches*self.hparams.num_patches, 128)
+        # self.A = DotProductAttention()
+        # self.A = SigDotProductAttention()
+        self.P = nn.Linear(in_features=128, out_features=self.hparams.out_features)        
+        
+        self.softmax = nn.Softmax(dim=1)
+
+        self.resize = transforms.Resize(self.hparams.patch_size)
+
+        self.train_transform = transforms.Compose(
+            [
+                RandomRotate(degrees=90, keys=["img", "seg"], interpolation=[transforms.functional.InterpolationMode.NEAREST, transforms.functional.InterpolationMode.NEAREST], prob=0.5), 
+                RandomFlip(keys=["img", "seg"], prob=0.5)
+            ]
+        )
+    def set_feat_model(self, model_feat):
+        self.F.module = model_feat
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
+        return optimizer
+    
+    def compute_bb(self, seg, label=3, pad=0):
+    
+        shape = seg.shape[1:]
+        
+        ij = torch.argwhere(seg.squeeze() == label)
+
+        bb = torch.tensor([0, 0, 0, 0])# xmin, ymin, xmax, ymax
+
+        bb[0] = torch.clip(torch.min(ij[:,1]) - shape[1]*pad, 0, shape[1])
+        bb[1] = torch.clip(torch.min(ij[:,0]) - shape[0]*pad, 0, shape[0])
+        bb[2] = torch.clip(torch.max(ij[:,1]) + shape[1]*pad, 0, shape[1])
+        bb[3] = torch.clip(torch.max(ij[:,0]) + shape[0]*pad, 0, shape[0])
+        
+        return bb
+    
+    def extract_patches(self, img, bb, N=3):
+        # Calculate the dimensions of the region of interest
+        xmin, ymin, xmax, ymax = bb
+
+        width = xmax - xmin
+        height = ymax - ymin
+
+        # Calculate the dimensions of each patch
+        patch_width = torch.div(width, N, rounding_mode='floor')
+        patch_height = torch.div(height, N, rounding_mode='floor')
+        patches = []
+
+        # Slide a window over the region of interest and extract patches
+        for j in range(ymin, ymax-patch_height+1, patch_height):
+            for i in range(xmin, xmax-patch_width+1, patch_width): 
+                patch = img[:, j:j+patch_height, i:i+patch_width]
+                patches.append(patch)
+
+        return self.resize(torch.stack(patches))
+
+    def forward(self, X):
+        
+        x_bb = torch.stack([self.compute_bb(seg, pad=self.hparams.pad) for seg in X["seg"]])
+        X_patches = torch.stack([self.extract_patches(img, bb, N=self.hparams.num_patches) for img, bb in zip(X["img"], x_bb)])
+
+        x = self.F(X_patches)
+        x = self.V(x)
+        x = self.A(x)
+        x = self.P(x)
 
         return x, X_patches
 
