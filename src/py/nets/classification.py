@@ -1981,3 +1981,133 @@ class SEResNext101YOLTv2(pl.LightningModule):
 
         self.accuracy(x, Y)
         self.log("test_acc", self.accuracy, sync_dist=True)
+
+class EfficientNetV2SYOLTv2(pl.LightningModule):
+    def __init__(self, **kwargs):
+        super(EfficientNetV2SYOLTv2, self).__init__()        
+        
+        self.save_hyperparameters()
+
+        class_weights = None
+        if hasattr(self.hparams, "class_weights"):
+            class_weights = torch.tensor(self.hparams.class_weights).to(torch.float32)
+            
+        self.loss = nn.CrossEntropyLoss(weight=class_weights)
+        self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.hparams.out_features)
+
+
+        model_feat = nn.Sequential(
+            models.efficientnet_v2_s(pretrained=True).features,
+            ops.Conv2dNormActivation(1280, 1536),
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(start_dim=1)
+            )
+        self.F = TimeDistributed(model_feat)
+        
+        self.V = nn.Linear(in_features=1536, out_features=64)
+        self.A = AttentionLinear(64*self.hparams.num_patches*self.hparams.num_patches, 128)
+        # self.A = DotProductAttention()
+        # self.A = SigDotProductAttention()
+        self.P = nn.Linear(in_features=128, out_features=self.hparams.out_features)        
+        
+        self.softmax = nn.Softmax(dim=1)
+
+        self.resize = transforms.Resize(self.hparams.patch_size)
+
+        self.train_transform = transforms.Compose(
+            [
+                RandomRotate(degrees=90, keys=["img", "seg"], interpolation=[transforms.functional.InterpolationMode.NEAREST, transforms.functional.InterpolationMode.NEAREST], prob=0.5), 
+                RandomFlip(keys=["img", "seg"], prob=0.5)
+            ]
+        )
+    def set_feat_model(self, model_feat):
+        self.F.module = model_feat
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
+        return optimizer
+    
+    def compute_bb(self, seg, label=3, pad=0):
+    
+        shape = seg.shape[1:]
+        
+        ij = torch.argwhere(seg.squeeze() == label)
+
+        bb = torch.tensor([0, 0, 0, 0])# xmin, ymin, xmax, ymax
+
+        bb[0] = torch.clip(torch.min(ij[:,1]) - shape[1]*pad, 0, shape[1])
+        bb[1] = torch.clip(torch.min(ij[:,0]) - shape[0]*pad, 0, shape[0])
+        bb[2] = torch.clip(torch.max(ij[:,1]) + shape[1]*pad, 0, shape[1])
+        bb[3] = torch.clip(torch.max(ij[:,0]) + shape[0]*pad, 0, shape[0])
+        
+        return bb
+    
+    def extract_patches(self, img, bb, N=3):
+        # Calculate the dimensions of the region of interest
+        xmin, ymin, xmax, ymax = bb
+
+        width = xmax - xmin
+        height = ymax - ymin
+
+        # Calculate the dimensions of each patch
+        patch_width = torch.div(width, N, rounding_mode='floor')
+        patch_height = torch.div(height, N, rounding_mode='floor')
+        patches = []
+
+        # Slide a window over the region of interest and extract patches
+        for j in range(ymin, ymax-patch_height+1, patch_height):
+            for i in range(xmin, xmax-patch_width+1, patch_width): 
+                patch = img[:, j:j+patch_height, i:i+patch_width]
+                patches.append(patch)
+
+        return self.resize(torch.stack(patches))
+
+    def forward(self, X):
+        
+        x_bb = torch.stack([self.compute_bb(seg, pad=self.hparams.pad) for seg in X["seg"]])
+        X_patches = torch.stack([self.extract_patches(img, bb, N=self.hparams.num_patches) for img, bb in zip(X["img"], x_bb)])
+
+        x = self.F(X_patches)
+        x = self.V(x)
+        x = self.A(x)
+        x = self.P(x)
+
+        return x, X_patches
+
+    def training_step(self, train_batch, batch_idx):
+
+        Y = train_batch["class"]
+
+        x, _ = self(self.train_transform(train_batch))
+        
+        loss = self.loss(x, Y)
+        
+        self.log('train_loss', loss)
+
+        self.accuracy(x, Y)
+        self.log("train_acc", self.accuracy)
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+
+        Y = val_batch["class"]
+
+        x, _ = self(val_batch)
+        
+        loss = self.loss(x, Y)
+        
+        self.log('val_loss', loss, sync_dist=True)
+
+        self.accuracy(x, Y)
+        self.log("val_acc", self.accuracy, sync_dist=True)
+
+    def test_step(self, test_batch, batch_idx):
+        Y = test_batch["class"]
+
+        x, _ = self(test_batch)
+        
+        loss = self.loss(x, Y)
+        
+        self.log('test_loss', loss, sync_dist=True)
+
+        self.accuracy(x, Y)
+        self.log("test_acc", self.accuracy, sync_dist=True)
