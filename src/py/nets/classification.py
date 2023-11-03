@@ -69,7 +69,7 @@ class EfficientnetV2s(pl.LightningModule):
             class_weights = torch.tensor(class_weights).to(torch.float32)
             
         self.loss = nn.CrossEntropyLoss(weight=class_weights)
-        self.accuracy = torchmetrics.Accuracy()
+        self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.hparams.out_features)
 
         # self.model = nn.Sequential(
         #     models.efficientnet_v2_s(pretrained=True).features,
@@ -107,6 +107,9 @@ class EfficientnetV2s(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.args.lr)
         return optimizer
+    
+    def get_feat_model(self):
+        return self.model[0:-1]
 
     def forward(self, x):
         x = self.test_transform(x)

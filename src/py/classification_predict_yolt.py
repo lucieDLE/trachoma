@@ -58,9 +58,12 @@ def main(args):
 
     df_test["pred"] = pred
 
-    
-    out_name = os.path.splitext(args.csv_test)[0] + "_" + os.path.basename(os.path.dirname(args.model)) + "_" + os.path.splitext(os.path.basename(args.model))[0] + "_prediction"
-
+    out_name = os.path.join(os.path.basename(os.path.dirname(args.model)), os.path.splitext(os.path.basename(args.csv_test))[0] + "_" + os.path.splitext(os.path.basename(args.model))[0] + "_prediction")
+    out_name = os.path.join(args.out, out_name)
+    out_dir = os.path.dirname(out_name)
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+    print("Writing:", out_name)
     df_test.to_csv(out_name + ".csv", index=False)
     pickle.dump(probs, open(out_name + ".pickle", 'wb'))
     
@@ -84,6 +87,9 @@ if __name__ == '__main__':
 
     hparams_group.add_argument('--nn', help='Type of PL neural network', type=str, default="MobileYOLT")
 
-    args = parser.parse_args()
+    output_group = parser.add_argument_group('Output')
+    output_group.add_argument('--out', help='Output directory', type=str, default='./out')
 
+    args = parser.parse_args()
+    
     main(args)
