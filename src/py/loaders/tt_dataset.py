@@ -10,20 +10,19 @@ import pytorch_lightning as pl
 from torchvision import transforms
 
 import monai
-from monai.transforms import (
-    AsChannelFirst,
+from monai.transforms import (    
     AsChannelLast,
     Compose,
     Lambda,
+    EnsureChannelFirst,
     SpatialPad,
     RandLambda,
     ScaleIntensity,
     ToTensor,    
     ToNumpy,
-    AddChanneld,
-    AsChannelFirstd,    
     AsChannelLastd,
     CenterSpatialCropd,
+    EnsureChannelFirstd,
     Lambdad,
     Padd,
     RandFlipd,
@@ -394,8 +393,8 @@ class TrainTransformsSeg:
         color_jitter = transforms.ColorJitter(brightness=[.5, 1.8], contrast=[0.5, 1.8], saturation=[.5, 1.8], hue=[-.2, .2])
         self.train_transform = Compose(
             [
-                AsChannelFirstd(keys=["img"]),
-                AddChanneld(keys=["seg"]),                              
+                EnsureChannelFirstd(strict_check=False, keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),                
                 LabelMapCrop(img_key="img", seg_key="seg", prob=0.5),
                 RandZoomd(keys=["img", "seg"], prob=0.5, min_zoom=0.5, max_zoom=1.5, mode=["area", "nearest"], padding_mode='constant'),
                 Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
@@ -415,8 +414,8 @@ class TrainTransformsFullSeg:
         color_jitter = transforms.ColorJitter(brightness=[.5, 1.8], contrast=[0.5, 1.8], saturation=[.5, 1.8], hue=[-.2, .2])
         self.train_transform = Compose(
             [
-                AsChannelFirstd(keys=["img"]),
-                AddChanneld(keys=["seg"]),
+                EnsureChannelFirstd(strict_check=False, keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
                 SquarePad(keys=["img", "seg"]),
                 RandomLabelMapCrop(img_key="img", seg_key="seg", prob=0.5, pad=0.15),
                 ScaleIntensityd(keys=["img"]),
@@ -431,8 +430,8 @@ class EvalTransformsFullSeg:
     def __init__(self):        
         self.eval_transform = Compose(
             [
-                AsChannelFirstd(keys=["img"]),
-                AddChanneld(keys=["seg"]),
+                EnsureChannelFirstd(strict_check=False, keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
                 SquarePad(keys=["img", "seg"]),
                 ScaleIntensityd(keys=["img"]),
                 ToTensord(keys=["img", "seg"])
@@ -445,8 +444,8 @@ class EvalTransformsSeg:
     def __init__(self):
         self.eval_transform = Compose(
             [
-                AsChannelFirstd(keys=["img"]),
-                AddChanneld(keys=["seg"]),                
+                EnsureChannelFirstd(strict_check=False, keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),          
                 Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
                 ScaleIntensityd(keys=["img"])                
             ]
@@ -459,8 +458,8 @@ class ExportTransformsSeg:
     def __init__(self):
         self.eval_transform = Compose(
             [
-                AsChannelFirstd(keys=["img"]),
-                AddChanneld(keys=["seg"]),                
+                EnsureChannelFirstd(strict_check=False, keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
                 Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
                 ScaleIntensityd(keys=["img"]),
                 AsChannelLastd(keys=["img"]),               
@@ -473,7 +472,7 @@ class ExportTransformsSeg:
 class InTransformsSeg:
     def __init__(self):
         self.transforms_in = Compose([
-                AsChannelFirst(),
+                EnsureChannelFirst(strict_check=False, channel_dim=-1),
                 ScaleIntensity(),
                 ToTensor(dtype=torch.float32),
                 Lambda(func=lambda x: torch.unsqueeze(x, dim=0)),

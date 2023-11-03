@@ -17,7 +17,6 @@ import monai
 import pytorch_lightning as pl
 
 from monai.transforms import (
-    AsChannelFirst,
     AsChannelLast,
     Compose,
     Lambda,
@@ -27,8 +26,6 @@ from monai.transforms import (
     ScaleIntensity,
     ToTensor,    
     ToNumpy,
-    AddChanneld,
-    AsChannelFirstd,    
     AsChannelLastd,
     CenterSpatialCropd,
     Lambdad,
