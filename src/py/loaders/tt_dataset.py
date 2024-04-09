@@ -20,7 +20,6 @@ from monai.transforms import (
     ScaleIntensity,
     ToTensor,    
     ToNumpy,
-    AddChanneld,    
     AsChannelLastd,
     CenterSpatialCropd,
     EnsureChannelFirstd,
@@ -395,7 +394,7 @@ class TrainTransformsSeg:
         self.train_transform = Compose(
             [
                 EnsureChannelFirstd(strict_check=False, keys=["img"]),
-                AddChanneld(keys=["seg"]),                              
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),                
                 LabelMapCrop(img_key="img", seg_key="seg", prob=0.5),
                 RandZoomd(keys=["img", "seg"], prob=0.5, min_zoom=0.5, max_zoom=1.5, mode=["area", "nearest"], padding_mode='constant'),
                 Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
@@ -416,7 +415,7 @@ class TrainTransformsFullSeg:
         self.train_transform = Compose(
             [
                 EnsureChannelFirstd(strict_check=False, keys=["img"]),
-                AddChanneld(keys=["seg"]),
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
                 SquarePad(keys=["img", "seg"]),
                 RandomLabelMapCrop(img_key="img", seg_key="seg", prob=0.5, pad=0.15),
                 ScaleIntensityd(keys=["img"]),
@@ -432,7 +431,7 @@ class EvalTransformsFullSeg:
         self.eval_transform = Compose(
             [
                 EnsureChannelFirstd(strict_check=False, keys=["img"]),
-                AddChanneld(keys=["seg"]),
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
                 SquarePad(keys=["img", "seg"]),
                 ScaleIntensityd(keys=["img"]),
                 ToTensord(keys=["img", "seg"])
@@ -446,7 +445,7 @@ class EvalTransformsSeg:
         self.eval_transform = Compose(
             [
                 EnsureChannelFirstd(strict_check=False, keys=["img"]),
-                AddChanneld(keys=["seg"]),                
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),          
                 Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
                 ScaleIntensityd(keys=["img"])                
             ]
@@ -460,7 +459,7 @@ class ExportTransformsSeg:
         self.eval_transform = Compose(
             [
                 EnsureChannelFirstd(strict_check=False, keys=["img"]),
-                AddChanneld(keys=["seg"]),                
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
                 Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
                 ScaleIntensityd(keys=["img"]),
                 AsChannelLastd(keys=["img"]),               
@@ -473,7 +472,7 @@ class ExportTransformsSeg:
 class InTransformsSeg:
     def __init__(self):
         self.transforms_in = Compose([
-                EnsureChannelFirst(strict_check=False),
+                EnsureChannelFirst(strict_check=False, channel_dim=-1),
                 ScaleIntensity(),
                 ToTensor(dtype=torch.float32),
                 Lambda(func=lambda x: torch.unsqueeze(x, dim=0)),

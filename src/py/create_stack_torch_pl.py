@@ -143,7 +143,7 @@ def main(args):
     else:
         device = torch.device("cpu")
 
-    model_seg = TTUNet.load_from_checkpoint(args.seg_model)
+    model_seg = TTUNet.load_from_checkpoint(args.seg_model, strict=False)
     model_seg.eval()
     model_seg.to(device)
 
@@ -157,11 +157,11 @@ def main(args):
 
     if args.dir:
         images = []
-        for file_path in glob.glob(os.path.join(args.dir,'**', '*.jpg'), recursive=True)    :
+        for file_path in glob.glob(os.path.join(args.dir,'**', '*.jpg'), recursive=True):
             images.append(file_path)
 
         df = pd.DataFrame({args.img_column: images})
-
+    
     if args.csv or args.dir:
 
         if args.csv:
@@ -177,6 +177,9 @@ def main(args):
 
             if args.csv_root:
                 img = img.replace(args.csv_root, '')
+            
+            if args.dir:
+                img = img.replace(args.dir, '')
 
             out = os.path.normpath(os.path.join(args.out, img)).replace(".jpg", ".nrrd")
 
@@ -246,9 +249,9 @@ def main(args):
                 print(bcolors.FAIL, e, bcolors.ENDC, file=sys.stderr)
 
         elif model_predict is not None:
-            out_stack =  sitk.ReadImage(obj["out"])
-            
-        if model_predict:
+            out_stack =  sitk.ReadImage(obj["out"])        
+        
+        if model_predict:            
             out_stack = sitk.GetArrayFromImage(out_stack)
             out_stack = torch.tensor(out_stack, dtype=torch.float32)
             out_stack = out_stack.permute((0, 3, 1, 2))
@@ -280,7 +283,9 @@ def main(args):
         if args.class_column:
             print(classification_report(df[args.class_column], df["pred"]))
 
-        df.to_csv(os.path.splitext(csv_fn)[0] + "_prediction.csv", index=False)
+        out_csv = os.path.splitext(csv_fn)[0] + "_prediction.csv"
+        print("Writing:", out_csv)
+        df.to_csv(out_csv, index=False)
         
         # pickle.dump((probs, features, scores, features_v, features_v_p), open(os.path.splitext(csv_fn)[0] + "_features.pickle", 'wb'))
             
