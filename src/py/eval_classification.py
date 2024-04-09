@@ -103,6 +103,8 @@ def main(args):
   fig2.savefig(norm_confusion_filename)
 
 
+  y_scores = None
+
   probs_fn = args.csv.replace("_prediction.csv", "_prediction.pickle")
   if os.path.exists(probs_fn):
     
@@ -110,6 +112,16 @@ def main(args):
 
     with open(probs_fn, 'rb') as f:
       y_scores = np.array(pickle.load(f))
+
+  features_fn = args.csv.replace("_prediction.csv", "_features.pickle")
+  if os.path.exists(features_fn):
+    
+    print("Reading:", features_fn)
+
+    with open(features_fn, 'rb') as f:
+      y_scores = np.array(pickle.load(f)[0])
+
+  if y_scores is not None:
 
     y_onehot = pd.get_dummies(y_true_arr)
 
