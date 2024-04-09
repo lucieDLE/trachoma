@@ -10,20 +10,20 @@ import pytorch_lightning as pl
 from torchvision import transforms
 
 import monai
-from monai.transforms import (
-    AsChannelFirst,
+from monai.transforms import (    
     AsChannelLast,
     Compose,
     Lambda,
+    EnsureChannelFirst,
     SpatialPad,
     RandLambda,
     ScaleIntensity,
     ToTensor,    
     ToNumpy,
-    AddChanneld,
-    AsChannelFirstd,    
+    AddChanneld,    
     AsChannelLastd,
     CenterSpatialCropd,
+    EnsureChannelFirstd,
     Lambdad,
     Padd,
     RandFlipd,
@@ -394,7 +394,7 @@ class TrainTransformsSeg:
         color_jitter = transforms.ColorJitter(brightness=[.5, 1.8], contrast=[0.5, 1.8], saturation=[.5, 1.8], hue=[-.2, .2])
         self.train_transform = Compose(
             [
-                AsChannelFirstd(keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["img"]),
                 AddChanneld(keys=["seg"]),                              
                 LabelMapCrop(img_key="img", seg_key="seg", prob=0.5),
                 RandZoomd(keys=["img", "seg"], prob=0.5, min_zoom=0.5, max_zoom=1.5, mode=["area", "nearest"], padding_mode='constant'),
@@ -415,7 +415,7 @@ class TrainTransformsFullSeg:
         color_jitter = transforms.ColorJitter(brightness=[.5, 1.8], contrast=[0.5, 1.8], saturation=[.5, 1.8], hue=[-.2, .2])
         self.train_transform = Compose(
             [
-                AsChannelFirstd(keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["img"]),
                 AddChanneld(keys=["seg"]),
                 SquarePad(keys=["img", "seg"]),
                 RandomLabelMapCrop(img_key="img", seg_key="seg", prob=0.5, pad=0.15),
@@ -431,7 +431,7 @@ class EvalTransformsFullSeg:
     def __init__(self):        
         self.eval_transform = Compose(
             [
-                AsChannelFirstd(keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["img"]),
                 AddChanneld(keys=["seg"]),
                 SquarePad(keys=["img", "seg"]),
                 ScaleIntensityd(keys=["img"]),
@@ -445,7 +445,7 @@ class EvalTransformsSeg:
     def __init__(self):
         self.eval_transform = Compose(
             [
-                AsChannelFirstd(keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["img"]),
                 AddChanneld(keys=["seg"]),                
                 Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
                 ScaleIntensityd(keys=["img"])                
@@ -459,7 +459,7 @@ class ExportTransformsSeg:
     def __init__(self):
         self.eval_transform = Compose(
             [
-                AsChannelFirstd(keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["img"]),
                 AddChanneld(keys=["seg"]),                
                 Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
                 ScaleIntensityd(keys=["img"]),
@@ -473,7 +473,7 @@ class ExportTransformsSeg:
 class InTransformsSeg:
     def __init__(self):
         self.transforms_in = Compose([
-                AsChannelFirst(),
+                EnsureChannelFirst(strict_check=False),
                 ScaleIntensity(),
                 ToTensor(dtype=torch.float32),
                 Lambda(func=lambda x: torch.unsqueeze(x, dim=0)),
