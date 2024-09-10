@@ -11,10 +11,12 @@ from torchvision import models
 from torchvision import transforms
 from torchvision import ops
 import torchmetrics
-
+from PIL import Image
 import monai
 
 import pytorch_lightning as pl
+from torchvision.ops import sigmoid_focal_loss
+from utils import mixup_img_seg, FocalLoss
 
 from monai.transforms import (
     AsChannelLast,
@@ -2005,14 +2007,19 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
         self.F = TimeDistributed(model_feat)
         
         self.V = nn.Linear(in_features=1536, out_features=64)
-        self.A = AttentionLinear(64*self.hparams.num_patches*self.hparams.num_patches, 128)
+
+        #####  multihead attention ####
+        self.A = nn.MultiheadAttention(embed_dim=1024, num_heads=4, batch_first=True)
+        self.V2A = nn.Linear(64, 1024)
+
+        # self.A = AttentionLinear(64*self.hparams.num_patches*self.hparams.num_patches, 128)
         # self.A = DotProductAttention()
         # self.A = SigDotProductAttention()
-        self.P = nn.Linear(in_features=128, out_features=self.hparams.out_features)        
         
-        self.softmax = nn.Softmax(dim=1)
+        self.P = nn.Linear(in_features=1024, out_features=self.hparams.out_features)        
 
         self.resize = transforms.Resize(self.hparams.patch_size)
+        self.resize_img = transforms.Resize(1536)
 
         self.train_transform = transforms.Compose(
             [
@@ -2030,7 +2037,7 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
     
         shape = seg.shape[1:]
         
-        ij = torch.argwhere(seg.squeeze() == label)
+        ij = torch.argwhere(seg.squeeze() != 0)
 
         bb = torch.tensor([0, 0, 0, 0])# xmin, ymin, xmax, ymax
 
@@ -2041,9 +2048,9 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
         
         return bb
     
-    def extract_patches(self, img, bb, N=3):
+    def extract_patches(self, img, N=3):
         # Calculate the dimensions of the region of interest
-        xmin, ymin, xmax, ymax = bb
+        xmin, ymin, xmax, ymax = 0,0, img.shape[2], img.shape[2]
 
         width = xmax - xmin
         height = ymax - ymin
@@ -2059,41 +2066,65 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
                 patch = img[:, j:j+patch_height, i:i+patch_width]
                 patches.append(patch)
 
-        return self.resize(torch.stack(patches))
+        return self.resize(torch.stack(patches)) ## here we're streching the patches
 
     def forward(self, X):
-        
+
         x_bb = torch.stack([self.compute_bb(seg, pad=self.hparams.pad) for seg in X["seg"]])
-        X_patches = torch.stack([self.extract_patches(img, bb, N=self.hparams.num_patches) for img, bb in zip(X["img"], x_bb)])
+        X_padded = torch.stack([self.compute_pad(img, bb) for img, bb in zip(X["img"], x_bb)])
+        X_patches = torch.stack([self.extract_patches(img_padded, N=self.hparams.num_patches) for img_padded in X_padded])
 
-        x = self.F(X_patches)
-        x = self.V(x)
-        x = self.A(x)
-        x = self.P(x)
+        x_f = self.F(X_patches)
+        x_v = self.V(x_f)
 
-        return x, X_patches
+        ##### Multihead Attention #####
+        x_v2a = self.V2A(x_v)
+        x_a, x_a_weights = self.A(x_v2a, x_v2a, x_v2a)  # Shape [BS, n_patches^2, 1024],[BS, n_patches^2, n_patches^2]
+
+        # use the weights to update x_a
+        sum_weights = torch.sum(x_a_weights, 1, keepdim=True)
+        attention_weights = x_a_weights / sum_weights   # Shape: [BS, n_patches^2, n_patches^2]
+
+        ##  mat1 (b×n×m), mat2 (b×m×p), out is (b×n×p)
+        x_a = x_a.transpose(1, 2)  # Shape: [BS, 1024, n_patches^2]
+        x_a = torch.bmm(x_a, attention_weights)  # Shape: [BS, 1024, n_patches^2]
+        x_a = x_a.transpose(1, 2)
+
+        x_a = torch.sum(x_a, dim=1)
+
+        ##### Linear Attention #####
+        # Reshape attention_weights to match x_a for batch matrix multiplication
+        # x_a = self.A(x_v)
+
+        x = self.P(x_a)
+        return x, X_patches, x_a, x_v,
 
     def training_step(self, train_batch, batch_idx):
 
-        Y = train_batch["class"]
+        batch = self.train_transform(train_batch)
+        # batch= mixup_img_seg(batch['img'], batch['seg'], batch['class'])
 
-        x, _ = self(self.train_transform(train_batch))
+        x, X_patches, x_a, x_v, = self(batch)
+        yhot = nn.functional.one_hot(batch['class'], num_classes=2).float() # not use if mixup
         
-        loss = self.loss(x, Y)
+        loss = self.loss(x.float(), batch['class'])
         
-        self.log('train_loss', loss)
+        self.log('train_loss', loss, sync_dist=True)
 
-        self.accuracy(x, Y)
-        self.log("train_acc", self.accuracy)
+        self.accuracy(x, batch['class'])
+        # self.accuracy(x,  torch.argmax(batch['class'], dim=1)) # if mixup
+        self.log("train_acc", self.accuracy, sync_dist=True)
         return loss
 
     def validation_step(self, val_batch, batch_idx):
 
         Y = val_batch["class"]
 
-        x, _ = self(val_batch)
+        x, X_patches, x_a, x_v, = self(val_batch)
+        yhot = nn.functional.one_hot(Y, num_classes=2).float()
         
-        loss = self.loss(x, Y)
+        # pred = torch.argmax(x,dim=1)
+        loss = self.loss(x.float(), yhot)
         
         self.log('val_loss', loss, sync_dist=True)
 
@@ -2103,7 +2134,7 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
     def test_step(self, test_batch, batch_idx):
         Y = test_batch["class"]
 
-        x, _ = self(test_batch)
+        x, X_patches, x_a, x_v, = self(test_batch)
         
         loss = self.loss(x, Y)
         
@@ -2111,3 +2142,26 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
 
         self.accuracy(x, Y)
         self.log("test_acc", self.accuracy, sync_dist=True)
+
+    def compute_pad(self, img, bb):
+
+        img_cropped = img[:, bb[1]:bb[3], bb[0]:bb[2]].unsqueeze(0)
+
+        H, W = img_cropped.shape[2], img_cropped.shape[3]
+        new_size = max(H,W)
+
+        x = torch.linspace(0, new_size - 1, new_size)
+        y = torch.linspace(0, new_size - 1, new_size)
+        grid_x, grid_y = torch.meshgrid(x, y, indexing='ij')
+
+        y_start = (new_size - W) // 2
+        x_start = (new_size - H) // 2
+
+        grid_y = (grid_y - y_start) / (W - 1) * 2 - 1
+        grid_x = (grid_x - x_start) / (H - 1) * 2 - 1
+
+        grid = torch.stack((grid_y, grid_x), dim=-1).unsqueeze(0).cuda()
+
+        img_padded = F.grid_sample(img_cropped, grid, mode='bilinear', padding_mode='zeros', align_corners=True)
+
+        return self.resize_img(img_padded[0])
