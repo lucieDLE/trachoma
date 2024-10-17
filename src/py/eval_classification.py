@@ -46,7 +46,7 @@ def plot_confusion_matrix(cm, classes,
     plt.yticks(tick_marks, classes)
 
     fmt = '.3f' if normalize else 'd'
-    thresh = cm.max() / 2.
+    thresh = .5 if normalize else np.sum(cm)/4
     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
         plt.text(j, i, format(cm[i, j], fmt),
                  horizontalalignment="center",
@@ -70,8 +70,8 @@ def main(args):
       df = pd.read_parquet(args.csv)
 
   if(args.csv_tag_column):
-    class_names = df[[args.csv_tag_column, args.csv_prediction_column]].drop_duplicates()[args.csv_tag_column]
-    class_names.sort()
+    class_names = df[[args.csv_tag_column, args.csv_true_column]].drop_duplicates()
+    class_names = class_names.sort_values(by=[args.csv_true_column])[args.csv_tag_column]
   else:
     class_names = pd.unique(df[args.csv_prediction_column])
     class_names.sort()
@@ -112,6 +112,7 @@ def main(args):
 
     with open(probs_fn, 'rb') as f:
       y_scores = np.array(pickle.load(f))
+      # y_scores = np.array(pickle.load(f))[0]
 
   features_fn = args.csv.replace("_prediction.csv", "_features.pickle")
   if os.path.exists(features_fn):
@@ -171,9 +172,9 @@ def main(args):
     report["macro avg"]["auc"] = np.average(auc) 
     report["weighted avg"]["auc"] = np.average(auc, weights=support) 
         
-    df_report = pd.DataFrame(report).transpose()
-    report_filename = os.path.splitext(args.csv)[0] + "_classification_report.csv"
-    df_report.to_csv(report_filename)
+  df_report = pd.DataFrame(report).transpose()
+  report_filename = os.path.splitext(args.csv)[0] + "_classification_report.csv"
+  df_report.to_csv(report_filename)
 
 
 def get_argparse():
