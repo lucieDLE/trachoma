@@ -46,11 +46,31 @@ def GetImage(img_np, ctype = 'float'):
 
 	return out_img
 
-import pdb
-def mixup_img_seg(x, seg, y, alpha=0.5):
+def mixup_img(x,y,alpha=0.5, num_classes=4):
 	batch_size = x.shape[0]
 
-	yhot = nn.functional.one_hot(y, num_classes=2)
+	yhot = nn.functional.one_hot(y, num_classes=num_classes)
+	
+	lam = np.random.beta(alpha, alpha, (batch_size,)).astype(dtype=np.float32)
+	lam = torch.from_numpy(lam).to(x.device)
+
+	index = torch.randperm(batch_size)
+	lam = lam.view(batch_size, *[1]*x[0].dim())
+
+	x_perm = torch.stack([x[idx,...] for idx in index])
+	
+	mixed_x = lam * x + (1 - lam) * x_perm
+
+	lam = lam.view(batch_size, 1)
+	mixed_y = lam * yhot + (1 - lam) * yhot[index, ...]
+
+	return  mixed_x, mixed_y
+
+
+def mixup_img_seg(x, seg, y, num_classes=4, alpha=0.5):
+	batch_size = x.shape[0]
+
+	yhot = nn.functional.one_hot(y, num_classes=num_classes)
 	
 	lam = np.random.beta(alpha, alpha, (batch_size,)).astype(dtype=np.float32)
 	lam = torch.from_numpy(lam).to(x.device)
@@ -72,21 +92,21 @@ def mixup_img_seg(x, seg, y, alpha=0.5):
 
 
 class FocalLoss(nn.Module):
-    def __init__(self, alpha=1, gamma=2, reduction='mean', weights =None):
-        super(FocalLoss, self).__init__()
-        self.alpha = alpha
-        self.gamma = gamma
-        self.reduction = reduction
-        self.weights = weights
+	def __init__(self, alpha=1, gamma=2, reduction='mean', weights =None):
+		super(FocalLoss, self).__init__()
+		self.alpha = alpha
+		self.gamma = gamma
+		self.reduction = reduction
+		self.weights = weights
 
-    def forward(self, inputs, targets):
-        BCE_loss = nn.functional.binary_cross_entropy_with_logits(inputs, targets, reduction='none', weight=self.weights)
-        pt = torch.exp(-BCE_loss)
-        F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
+	def forward(self, inputs, targets):
+		BCE_loss = nn.functional.binary_cross_entropy_with_logits(inputs, targets, reduction='none', weight=self.weights)
+		pt = torch.exp(-BCE_loss)
+		F_loss = self.alpha * (1-pt)**self.gamma * BCE_loss
 
-        if self.reduction == 'mean':
-            return F_loss.mean()
-        elif self.reduction == 'sum':
-            return F_loss.sum()
-        else:
-            return F_loss
+		if self.reduction == 'mean':
+			return F_loss.mean()
+		elif self.reduction == 'sum':
+			return F_loss.sum()
+		else:
+			return F_loss
