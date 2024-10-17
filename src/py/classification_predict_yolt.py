@@ -4,6 +4,7 @@ import math
 import os
 import pandas as pd
 import numpy as np 
+from monai.data.utils import pad_list_data_collate
 
 import torch
 from torch import nn
@@ -39,22 +40,27 @@ def main(args):
 
     test_ds = monai.data.Dataset(TTDatasetSeg(df_test, mount_point=args.mount_point, img_column=args.img_column, seg_column=args.seg_column, class_column=args.class_column), transform=eval_transform)
 
-    test_loader = DataLoader(test_ds, batch_size=1, num_workers=args.num_workers)
+    test_loader = DataLoader(test_ds, batch_size=1, num_workers=args.num_workers,pin_memory=False, drop_last=True, collate_fn=pad_list_data_collate)
 
-    pred = []
+    pred,  features, features_v = [], [], []
     probs = []
     softmax = nn.Softmax()
 
-    for idx, batch in tqdm(enumerate(test_loader), total=len(test_loader)):
-        for k in batch:
-            batch[k] = batch[k].cuda(non_blocking=True)
-        x, X_patches = model(batch)
+    with torch.no_grad():
+        for idx, batch in tqdm(enumerate(test_loader), total=len(test_loader)):
+            for k in batch:
+                batch[k] = batch[k].cuda(non_blocking=True)
+            x, _, x_a, x_v = model(batch)
 
-        x = x.detach().squeeze()
+            x = x.detach().squeeze()
+            features.append(x_a)
+            features_v.append(x_v)
 
-        pred.append(torch.argmax(x).cpu().numpy())
-        probs.append(softmax(x).cpu().numpy())
+            pred.append(torch.argmax(x).cpu().numpy())
+            probs.append(softmax(x).cpu().numpy())
 
+    features = torch.cat(features, dim=0).cpu().numpy()
+    features_v = torch.cat(features_v, dim=0).cpu().numpy()
 
     df_test["pred"] = pred
 
