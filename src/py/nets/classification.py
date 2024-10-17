@@ -16,7 +16,7 @@ import monai
 
 import pytorch_lightning as pl
 from torchvision.ops import sigmoid_focal_loss
-from utils import mixup_img_seg, FocalLoss
+from utils import mixup_img_seg, FocalLoss, mixup_img
 
 from monai.transforms import (
     AsChannelLast,
@@ -55,11 +55,11 @@ class GaussianNoise(nn.Module):
         return x + torch.normal(mean=self.mean, std=self.std, size=x.size(), device=x.device)
 
 class EfficientnetV2s(pl.LightningModule):
-    def __init__(self, args = None, out_features=3, class_weights=None, features=False):
+    def __init__(self, out_features=3, class_weights=None, features=False, **kwargs):
+    # def __init__(self, **kwargs):
         super(EfficientnetV2s, self).__init__()        
         
         self.save_hyperparameters()        
-        self.args = args
 
         self.class_weights = class_weights
         self.features = features
@@ -104,14 +104,14 @@ class EfficientnetV2s(pl.LightningModule):
         )
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.args.lr)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
         return optimizer
     
     def get_feat_model(self):
         return self.model[0:-1]
 
     def forward(self, x):
-        x = self.test_transform(x)
+        # x = self.test_transform(x)
         if self.features:            
             x = self.model[0](x)
             x = self.model[1](x)
@@ -129,6 +129,7 @@ class EfficientnetV2s(pl.LightningModule):
         x, y = train_batch        
         
         x = self.train_transform(x)
+        x,y= mixup_img(x,y,num_classes=self.hparams.out_features)
         
         x = self.model(x)
 
@@ -136,7 +137,7 @@ class EfficientnetV2s(pl.LightningModule):
         
         self.log('train_loss', loss)
 
-        self.accuracy(x, y)
+        self.accuracy(x, torch.argmax(y, dim=1))
         self.log("train_acc", self.accuracy)
         return loss
 
@@ -2033,7 +2034,7 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
         return optimizer
     
-    def compute_bb(self, seg, label=3, pad=0):
+    def compute_bb(self, seg, pad=0):
     
         shape = seg.shape[1:]
         
@@ -2050,14 +2051,15 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
     
     def extract_patches(self, img, N=3):
         # Calculate the dimensions of the region of interest
-        xmin, ymin, xmax, ymax = 0,0, img.shape[2], img.shape[2]
+        # xmin, ymin, xmax, ymax = 0,0, img.shape[2], img.shape[2]
+        xmin, ymin, xmax, ymax = 0,0, img.shape[2], img.shape[1]
 
         width = xmax - xmin
         height = ymax - ymin
 
         # Calculate the dimensions of each patch
-        patch_width = torch.div(width, N, rounding_mode='floor')
-        patch_height = torch.div(height, N, rounding_mode='floor')
+        patch_width = torch.div(width, self.n_patch_width, rounding_mode='floor')
+        patch_height = torch.div(height, self.n_patch_height, rounding_mode='floor')
         patches = []
 
         # Slide a window over the region of interest and extract patches
@@ -2071,8 +2073,13 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
     def forward(self, X):
 
         x_bb = torch.stack([self.compute_bb(seg, pad=self.hparams.pad) for seg in X["seg"]])
-        X_padded = torch.stack([self.compute_pad(img, bb) for img, bb in zip(X["img"], x_bb)])
-        X_patches = torch.stack([self.extract_patches(img_padded, N=self.hparams.num_patches) for img_padded in X_padded])
+        if self.hparams.square_pad:
+            X_padded = torch.stack([self.compute_square_pad(img, bb) for img, bb in zip(X["img"], x_bb)])
+        else:
+            X_padded = [self.compute_height_based_pad(img, bb) for img, bb in zip(X["img"], x_bb)] ## removed the stack because different images size
+
+        X_patches = [self.extract_patches(img_padded, N=self.hparams.num_patches) for img_padded in X_padded]
+        X_patches = torch.stack(X_patches)
 
         x_f = self.F(X_patches)
         x_v = self.V(x_f)
@@ -2112,7 +2119,7 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
         self.log('train_loss', loss, sync_dist=True)
 
         self.accuracy(x, batch['class'])
-        # self.accuracy(x,  torch.argmax(batch['class'], dim=1)) # if mixup
+        #self.accuracy(x.detach(),  torch.argmax(batch['class'], dim=1).detach()) # if mixup
         self.log("train_acc", self.accuracy, sync_dist=True)
         return loss
 
@@ -2143,9 +2150,13 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
         self.accuracy(x, Y)
         self.log("test_acc", self.accuracy, sync_dist=True)
 
-    def compute_pad(self, img, bb):
+
+    def compute_square_pad(self, img, bb):
 
         img_cropped = img[:, bb[1]:bb[3], bb[0]:bb[2]].unsqueeze(0)
+        
+        self.n_patch_width = self.hparams.num_patches
+        self.n_patch_height = self.hparams.num_patches
 
         H, W = img_cropped.shape[2], img_cropped.shape[3]
         new_size = max(H,W)
@@ -2162,6 +2173,37 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
 
         grid = torch.stack((grid_y, grid_x), dim=-1).unsqueeze(0).cuda()
 
+        img_padded = F.grid_sample(img_cropped, grid, mode='bilinear', padding_mode='zeros', align_corners=True)
+
+        return self.resize_img(img_padded[0])
+
+    def compute_height_based_pad(self, img, bb):
+
+        img_cropped = img[:, bb[1]:bb[3], bb[0]:bb[2]].unsqueeze(0)
+
+        H, W = img_cropped.shape[2], img_cropped.shape[3]
+
+        self.n_patch_width = self.hparams.num_patches
+        patch_size = int(W/self.n_patch_width) 
+        self.n_patch_height = int(np.trunc(H/patch_size))+1
+
+        print(self.n_patch_height, self.n_patch_width)
+
+        new_height = self.n_patch_height * patch_size
+        new_width = self.n_patch_width * patch_size
+
+        x = torch.linspace(0, new_height - 1, new_height)
+        y = torch.linspace(0, new_width - 1, new_width)
+        grid_x, grid_y = torch.meshgrid(x, y, indexing='ij')
+
+        x_start = (new_height - H) // 2
+        y_start = (new_width - W) // 2
+
+        grid_y = (grid_y - y_start) / (W - 1) * 2 - 1
+        grid_x = (grid_x - x_start) / (H - 1) * 2 - 1
+
+
+        grid = torch.stack((grid_y, grid_x), dim=-1).unsqueeze(0).cuda()
         img_padded = F.grid_sample(img_cropped, grid, mode='bilinear', padding_mode='zeros', align_corners=True)
 
         return self.resize_img(img_padded[0])
