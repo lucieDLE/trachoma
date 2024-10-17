@@ -17,6 +17,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.strategies.ddp import DDPStrategy
 from pytorch_lightning.loggers import NeptuneLogger, TensorBoardLogger
+from pytorch_lightning import loggers as pl_loggers
 
 from sklearn.utils import class_weight
 
@@ -87,20 +88,35 @@ def main(args):
         dirpath=args.out,
         filename='{epoch}-{val_loss:.2f}',
         save_top_k=2,
-        monitor='val_loss'
+        monitor='val_loss',
+        save_last=True
     )
 
     image_logger = StackImageLogger(log_steps=args.log_every_n_steps)
 
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=args.patience, verbose=True, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_acc", min_delta=0.00, patience=args.patience, verbose=True, mode="max")
 
     if args.tb_dir:
         logger = TensorBoardLogger(save_dir=args.tb_dir, name=args.tb_name)    
+    
+    elif args.experiment_name:
+        logger = pl_loggers.CometLogger(api_key='jvo9wdLqVzWla60yIWoCd0fX2',
+                                        project_name='trachoma', 
+                                        workspace='luciedle',
+                                        experiment_name=args.experiment_name,
+                                        )
+
+    elif args.neptune_tags:
+        logger = NeptuneLogger(project='ImageMindAnalytics/trachoma',
+                                          tags=args.neptune_tags,
+                                          api_key=os.environ['NEPTUNE_API_TOKEN'],
+                                          log_model_checkpoints=False
+                                          )
 
     trainer = Trainer(
         logger=logger,
         max_epochs=args.epochs,
-        callbacks=[early_stop_callback, checkpoint_callback, image_logger],
+        callbacks=[early_stop_callback, checkpoint_callback],
         devices=torch.cuda.device_count(), 
         accelerator="gpu", 
         strategy=DDPStrategy(find_unused_parameters=False),
@@ -112,8 +128,7 @@ def main(args):
     
 
 
-if __name__ == '__main__':
-
+def get_argparse():
 
     parser = argparse.ArgumentParser(description='Surgery prediction Training')
 
@@ -148,17 +163,22 @@ if __name__ == '__main__':
     hparams_group.add_argument('--num_patches', help='Number of patches to extract', type=int, default=5)
     hparams_group.add_argument('--accumulate_grad_batches', help='Accumulate gradient steps', type=int, default=1)
     hparams_group.add_argument('--pad', help='Pad the bounding box', type=float, default=0.1)
-    
+    hparams_group.add_argument('--square_pad', help='how to pad the image', type=int, default=0)
     
     logger_group = parser.add_argument_group('Logger')
     logger_group.add_argument('--log_every_n_steps', help='Log every n steps', type=int, default=10)
     logger_group.add_argument('--tb_dir', help='Tensorboard output dir', type=str, default=None)
-    logger_group.add_argument('--tb_name', help='Tensorboard experiment name', type=str, default="classification_popp")
-    
+    logger_group.add_argument('--tb_name', help='Tensorboard experiment name', type=str, default=None)
+    logger_group.add_argument('--experiment_name', help='experiment name', type=str, default=None)
+    logger_group.add_argument('--neptune_tags', help='experiment name', type=str, default=None)
 
     output_group = parser.add_argument_group('Output')
     output_group.add_argument('--out', help='Output', type=str, default="./")
 
+    return parser
+    
+if __name__ == '__main__':
+    parser = get_argparse()
     args = parser.parse_args()
 
     main(args)
