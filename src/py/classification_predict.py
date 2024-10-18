@@ -18,25 +18,28 @@ from tqdm import tqdm
 
 import pickle
 
+def remove_labels(df, args):
+    df = df[ ~ df[args.label_column].isin(args.drop_labels)]
+    if args.concat_labels is not None:
+        replacement_val = df.loc[ df['label'] == args.concat_labels[0]]['class'].unique()
+        df.loc[ df['label'].isin(args.concat_labels), "class" ] = replacement_val[0]
+
+    unique_classes = sorted(df[args.class_column].unique())
+    class_mapping = {value: idx for idx, value in enumerate(unique_classes)}
+
+    df[args.class_column] = df[args.class_column].map(class_mapping)
+    print(f"Kept Classes : {df[args.label_column].unique()}, {class_mapping}")
+    return df
+
 def main(args):
 
     df_test = pd.read_csv(args.csv_test)
-    df_test.drop(df_test[df_test[args.class_column].isin(['Probable Epilation', 'Probable TT', 'Unknown'])].index, inplace = True)
-
-    # unique_classes = np.sort(np.unique(df_test[args.class_column]))
-    # unique_class_weights = np.array(class_weight.compute_class_weight(class_weight='balanced', classes=unique_classes, y=df_test[args.class_column]))
-
-    # class_replace = {}
-    # for cn, cl in enumerate(unique_classes):
-    #     class_replace[cl] = cn
-    # print(unique_classes, unique_class_weights, class_replace)
-
-    # df_test[args.class_column] = df_test[args.class_column].replace(class_replace)
-    
-    df_test[args.class_column] = df_test[args.class_column].replace({'Healthy': 0, 'Epilation': 1, 'TT': 2})
+    df_test = remove_labels(df_test, args)
 
     test_ds = TTDataset(df_test, args.mount_point, img_column=args.img_column, class_column=args.class_column)
     test_data = DataLoader(test_ds, shuffle=False, batch_size=args.batch_size, num_workers=args.num_workers, persistent_workers=True, pin_memory=True)
+
+    print(df_test['label'].value_counts())
 
     # if args.nn == "efficientnet_v2s":
     #     model = EfficientnetV2s(args, out_features=args.out_features).load_from_checkpoint(args.model)
@@ -81,9 +84,12 @@ if __name__ == '__main__':
     input_group.add_argument('--model', help='Model of trained model', type=str, required=True)
     input_group.add_argument('--img_column', help='Name of the image column on the csv', type=str, default="image")
     input_group.add_argument('--class_column', help='Name of the class column on the csv', type=str, default="patch_class")
+    input_group.add_argument('--label_column', help='tag column name in csv, containing actual name', type=str, default="label")
+    input_group.add_argument('--drop_labels', type=str, default=None, nargs='+', help='drop labels in dataframe')    
     input_group.add_argument('--mount_point', help='Dataset mount directory', type=str, default="./")
     input_group.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
-    
+    input_group.add_argument('--concat_labels', type=str, default=None, nargs='+', help='concat labels in dataframe')
+
     hparams_group = parser.add_argument_group('Hyperparameters')
     hparams_group.add_argument('--batch_size', help='Batch size', type=int, default=256)
     hparams_group.add_argument('--nn', help='Type of neural network', type=str, default="efficientnet_v2s")
