@@ -28,11 +28,25 @@ def replace_last(str, old, new):
     idx = str.rfind(old)
     return str[:idx] + new + str[idx+len(old):]
 
+def remove_labels(df, args):
+    df = df[ ~ df[args.label_column].isin(args.drop_labels)]
+
+    unique_classes = sorted(df[args.class_column].unique())
+    class_mapping = {value: idx for idx, value in enumerate(unique_classes)}
+
+    df[args.class_column] = df[args.class_column].map(class_mapping)
+    print(f"Kept Classes : {df[args.label_column].unique()}, {class_mapping}")
+    return df
+
 def main(args):
 
     df_train = pd.read_csv(args.csv_train)
     df_val = pd.read_csv(args.csv_valid)    
     df_test = pd.read_csv(args.csv_test)
+
+    df_train = remove_labels(df_train, args)
+    df_val = remove_labels(df_val, args)
+    df_test = remove_labels(df_test, args)
 
     args_params = vars(args)
     unique_classes = np.sort(np.unique(df_train[args.class_column]))
@@ -133,8 +147,9 @@ if __name__ == '__main__':
     input_group.add_argument('--num_workers', help='Number of workers for loading', type=int, default=4)
 
     input_group.add_argument('--img_column', help='image column name in csv', type=str, default="img")
-    input_group.add_argument('--class_column', help='patch class column name in csv', type=str, default="class")
-
+    input_group.add_argument('--class_column', help='class column name in csv', type=str, default="class")
+    input_group.add_argument('--label_column', help='tag column name in csv, containing actual name', type=str, default="class")
+    input_group.add_argument('--drop_labels', type=str, default=None, nargs='+', help='drop labels in dataframe')
 
     weight_group = input_group.add_mutually_exclusive_group()
     weight_group.add_argument('--balanced_weights', type=int, default=0, help='Compute weights for balancing the data')
