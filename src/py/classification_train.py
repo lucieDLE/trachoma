@@ -29,7 +29,9 @@ def replace_last(str, old, new):
     return str[:idx] + new + str[idx+len(old):]
 
 def remove_labels(df, args):
-    df = df[ ~ df[args.label_column].isin(args.drop_labels)]
+
+    if args.drop_labels is not None:
+        df = df[ ~ df[args.label_column].isin(args.drop_labels)]
 
     if args.concat_labels is not None:
         replacement_val = df.loc[ df['label'] == args.concat_labels[0]]['class'].unique()
@@ -98,7 +100,7 @@ def main(args):
     NN = getattr(classification, args.nn)
     model = NN(**args_params)    
     
-    early_stop_callback = EarlyStopping(monitor="val_acc", min_delta=0.00, patience=args.patience, verbose=True, mode="max")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=args.patience, verbose=True, mode="min")
 
     logger = None
     if args.tb_dir:

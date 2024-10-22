@@ -19,7 +19,9 @@ from tqdm import tqdm
 import pickle
 
 def remove_labels(df, args):
-    df = df[ ~ df[args.label_column].isin(args.drop_labels)]
+    if args.drop_labels is not None:
+        df = df[ ~ df[args.label_column].isin(args.drop_labels)]
+
     if args.concat_labels is not None:
         replacement_val = df.loc[ df['label'] == args.concat_labels[0]]['class'].unique()
         df.loc[ df['label'].isin(args.concat_labels), "class" ] = replacement_val[0]
