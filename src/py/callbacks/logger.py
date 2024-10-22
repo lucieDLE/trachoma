@@ -57,9 +57,17 @@ class StackImageLogger(Callback):
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, unused=0):
         
         if batch_idx % self.log_steps == 0:
+            img2 = batch["seg"]
+            max_num_image = min(img2.shape[0], self.num_images)
+            grid_p = torchvision.utils.make_grid(img2, nrow=max_num_image)
+            fig = plt.figure(figsize=(7, 9))
+
+            ax = plt.imshow(grid_p.permute(1, 2, 0).cpu().numpy())
+            trainer.logger.experiment["images/seg"].upload(fig)
+            plt.close()
 
             with torch.no_grad():
-                x_bb, X_patches = pl_module(batch)
+                x, X_patches, x_a, x_v, = pl_module(batch)
 
                 X_patches = X_patches[0:self.num_images].cpu()
 
@@ -67,4 +75,9 @@ class StackImageLogger(Callback):
                     x_p = X_patches[i]
 
                     grid_p = torchvision.utils.make_grid(x_p, nrow=pl_module.hparams.num_patches)
-                    trainer.logger.experiment.add_image('grid_p{i}'.format(i=i), grid_p, pl_module.global_step)
+                    fig = plt.figure(figsize=(7, 9))
+
+                    ax = plt.imshow(grid_p.permute(1, 2, 0).cpu().numpy())
+                    trainer.logger.experiment["images/x"].upload(fig)
+                    plt.close()
+                    # trainer.logger.experiment.add_image('grid_p{i}'.format(i=i), grid_p, pl_module.global_step)
