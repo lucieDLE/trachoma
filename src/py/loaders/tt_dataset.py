@@ -20,6 +20,7 @@ from monai.transforms import (
     ScaleIntensity,
     ToTensor,    
     ToNumpy,
+    AddChanneld,
     AsChannelLastd,
     CenterSpatialCropd,
     EnsureChannelFirstd,
@@ -83,7 +84,7 @@ class TTDataset(Dataset):
             img = img/255.0
         except:
             print("Error reading frame: " + img_path)
-            img = torch.zeros(3, 256, 256, dtype=torch.float32)
+            img = torch.zeros(3, 512, 512, dtype=torch.float32)
 
         if(self.transform):
             img = self.transform(img)
@@ -194,13 +195,23 @@ class TTDataModule(pl.LightningDataModule):
         self.test_ds = TTDataset(self.df_test, self.mount_point, img_column=self.img_column, class_column=self.class_column, transform=self.valid_transform)
 
     def train_dataloader(self):
-        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, persistent_workers=True, pin_memory=True, drop_last=self.drop_last)
+        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, persistent_workers=True, collate_fn=self.custom_collate_fn, pin_memory=False, drop_last=self.drop_last)
 
     def val_dataloader(self):
-        return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers, persistent_workers=True, pin_memory=True, drop_last=self.drop_last)
+        return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers, persistent_workers=True, collate_fn=self.custom_collate_fn, pin_memory=False, drop_last=self.drop_last)
 
     def test_dataloader(self):
-        return DataLoader(self.test_ds, batch_size=self.batch_size, num_workers=self.num_workers, persistent_workers=True, pin_memory=True, drop_last=self.drop_last)
+        return DataLoader(self.test_ds, batch_size=self.batch_size, num_workers=self.num_workers, persistent_workers=True, collate_fn=self.custom_collate_fn, pin_memory=False, drop_last=self.drop_last)
+
+    def custom_collate_fn(self,batch):
+        imgs, labels = zip(*batch)
+
+        max_height = max([img.shape[1] for img in imgs])
+        max_width = max([img.shape[2] for img in imgs])
+        padded_imgs = [torch.nn.functional.pad(img, (0, max_width - img.shape[2], 0, max_height - img.shape[1])) for img in imgs]
+    
+        return torch.stack(padded_imgs), torch.tensor(labels)
+
 
 class TTDataModuleStacks(pl.LightningDataModule):
     def __init__(self, df_train, df_val, df_test, mount_point="./", batch_size=32, num_workers=4, img_column="img_path", class_column=None, train_transform=None, valid_transform=None, test_transform=None, drop_last=False):
@@ -393,8 +404,8 @@ class TrainTransformsSeg:
         color_jitter = transforms.ColorJitter(brightness=[.5, 1.8], contrast=[0.5, 1.8], saturation=[.5, 1.8], hue=[-.2, .2])
         self.train_transform = Compose(
             [
-                EnsureChannelFirstd(strict_check=False, keys=["img"]),
-                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),                
+                EnsureChannelFirstd(strict_check=False, keys=["img"], channel_dim=2),
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
                 LabelMapCrop(img_key="img", seg_key="seg", prob=0.5),
                 RandZoomd(keys=["img", "seg"], prob=0.5, min_zoom=0.5, max_zoom=1.5, mode=["area", "nearest"], padding_mode='constant'),
                 Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
@@ -414,7 +425,7 @@ class TrainTransformsFullSeg:
         color_jitter = transforms.ColorJitter(brightness=[.5, 1.8], contrast=[0.5, 1.8], saturation=[.5, 1.8], hue=[-.2, .2])
         self.train_transform = Compose(
             [
-                EnsureChannelFirstd(strict_check=False, keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["img"], channel_dim=2),
                 EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
                 SquarePad(keys=["img", "seg"]),
                 RandomLabelMapCrop(img_key="img", seg_key="seg", prob=0.5, pad=0.15),
@@ -430,7 +441,7 @@ class EvalTransformsFullSeg:
     def __init__(self):        
         self.eval_transform = Compose(
             [
-                EnsureChannelFirstd(strict_check=False, keys=["img"]),
+                EnsureChannelFirstd(strict_check=False, keys=["img"], channel_dim=2),
                 EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
                 SquarePad(keys=["img", "seg"]),
                 ScaleIntensityd(keys=["img"]),
@@ -444,8 +455,8 @@ class EvalTransformsSeg:
     def __init__(self):
         self.eval_transform = Compose(
             [
-                EnsureChannelFirstd(strict_check=False, keys=["img"]),
-                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),          
+                EnsureChannelFirstd(strict_check=False, keys=["img"], channel_dim=2),
+                EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),       
                 Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
                 ScaleIntensityd(keys=["img"])                
             ]
@@ -460,6 +471,7 @@ class ExportTransformsSeg:
             [
                 EnsureChannelFirstd(strict_check=False, keys=["img"]),
                 EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
+                AddChanneld(keys=["seg"]),     
                 Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
                 ScaleIntensityd(keys=["img"]),
                 AsChannelLastd(keys=["img"]),               
