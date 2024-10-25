@@ -6,7 +6,7 @@ import nrrd
 import os
 import math
 import torch
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 from torchvision import transforms
 
 import monai

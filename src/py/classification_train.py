@@ -10,14 +10,14 @@ import torch
 from nets import classification
 from loaders.tt_dataset import TTDataModule, TrainTransforms, EvalTransforms
 
-from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.strategies.ddp import DDPStrategy
-from pytorch_lightning.loggers import NeptuneLogger, TensorBoardLogger
-from pytorch_lightning import loggers as pl_loggers
+from lightning import Trainer
+from lightning.pytorch.callbacks.early_stopping import EarlyStopping
+from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.strategies.ddp import DDPStrategy
+from lightning.pytorch.loggers import NeptuneLogger, TensorBoardLogger
+from lightning.pytorch import loggers as pl_loggers
 
-# from pytorch_lightning.callbacks import QuantizationAwareTraining
+# from lightning.pytorch.callbacks import QuantizationAwareTraining
 # from torch.utils.mobile_optimizer import optimize_for_mobile
 
 from sklearn.utils import class_weight
@@ -98,7 +98,7 @@ def main(args):
 
 
     NN = getattr(classification, args.nn)
-    model = NN(**args_params)    
+    model = NN(config=args_params)    
     
     early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=args.patience, verbose=True, mode="min")
 
@@ -180,6 +180,8 @@ if __name__ == '__main__':
     hparams_group.add_argument('--batch_size', help='Batch size', type=int, default=256)
     hparams_group.add_argument('--nn', help='Type of neural network', type=str, default="efficientnet_v2s")    
     hparams_group.add_argument('--patience', help='Max number of patience steps for EarlyStopping', type=int, default=30)
+    hparams_group.add_argument('--feature_size', help='dimension of feature space', type=int, default=1536)
+    hparams_group.add_argument('--dropout', help='dropout', type=float, default=0.2)
 
     logger_group = parser.add_argument_group('Logger')
     logger_group.add_argument('--log_every_n_steps', help='Log every n steps', type=int, default=50)    

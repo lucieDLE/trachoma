@@ -14,7 +14,7 @@ import torchmetrics
 from PIL import Image
 import monai
 
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 from torchvision.ops import sigmoid_focal_loss
 from utils import mixup_img_seg, FocalLoss, mixup_img
 
@@ -55,19 +55,19 @@ class GaussianNoise(nn.Module):
         return x + torch.normal(mean=self.mean, std=self.std, size=x.size(), device=x.device)
 
 class EfficientnetV2s(pl.LightningModule):
-    def __init__(self, out_features=3, class_weights=None, features=False, **kwargs):
+    def __init__(self, features=False, **kwargs):
     # def __init__(self, **kwargs):
         super(EfficientnetV2s, self).__init__()        
         
         self.save_hyperparameters()        
 
-        self.class_weights = class_weights
+        self.class_weights = self.hparams.class_weights
         self.features = features
 
-        if(class_weights is not None):
-            class_weights = torch.tensor(class_weights).to(torch.float32)
+        if(self.class_weights is not None):
+            self.class_weights = torch.tensor(self.class_weights).to(torch.float32)
             
-        self.loss = nn.CrossEntropyLoss(weight=class_weights)
+        self.loss = nn.CrossEntropyLoss(weight=self.class_weights)
         self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.hparams.out_features)
 
         # self.model = nn.Sequential(
@@ -79,12 +79,12 @@ class EfficientnetV2s(pl.LightningModule):
         #     )
         self.model = nn.Sequential(
             models.efficientnet_v2_s(pretrained=True).features,
-            ops.Conv2dNormActivation(1280, 1536),
+            ops.Conv2dNormActivation(1280, self.hparams.feature_size),
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(start_dim=1),
             nn.Sequential(
-                nn.Dropout(p=0.2, inplace=True),
-                nn.Linear(in_features=1536, out_features=out_features, bias=True)
+                nn.Dropout(p=self.hparams.dropout, inplace=True),
+                nn.Linear(in_features=self.hparams.feature_size, out_features=self.hparams.out_features, bias=True)
                 )
             )
         
