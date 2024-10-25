@@ -61,7 +61,7 @@ def plot_confusion_matrix(cm, classes,
 
 def remove_labels(df, args):
   if args.drop_labels is not None:
-      df = df[ ~ df[args.label_column].isin(args.drop_labels)]
+      df = df[ ~ df[args.csv_tag_column].isin(args.drop_labels)]
 
   if args.concat_labels is not None:
       replacement_val = df.loc[ df['label'] == args.concat_labels[0]]['class'].unique()
@@ -204,7 +204,7 @@ def get_argparse():
 
   parser.add_argument('--csv', type=str, help='csv file', required=True)
   parser.add_argument('--csv_true_column', type=str, help='Which column to do the stats on', default="class")
-  parser.add_argument('--csv_tag_column', type=str, help='Which column has the actual names', default=None)
+  parser.add_argument('--csv_tag_column', type=str, help='Which column has the actual names', default="label")
   parser.add_argument('--csv_prediction_column', type=str, help='csv true class', default='pred')
   parser.add_argument('--title', type=str, help='Title for the image', default="Confusion matrix")
   parser.add_argument('--figsize', type=float, nargs='+', help='Figure size', default=(6.4, 4.8))
