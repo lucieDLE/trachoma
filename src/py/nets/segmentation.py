@@ -20,9 +20,9 @@ from monai.transforms import (
 
 import lightning.pytorch as pl
 
-from pl_bolts.transforms.dataset_normalizations import (
-    imagenet_normalization
-)
+# from pl_bolts.transforms.dataset_normalizations import (
+#     imagenet_normalization
+# )
 
 class TTUSeg(nn.Module):
     def __init__(self, unet):
@@ -113,6 +113,8 @@ class TTUNet(pl.LightningModule):
         # self.accuracy(x.reshape(-1, 1), y.reshape(-1, 1))
         # self.log("val_acc", self.accuracy, batch_size=batch_size)
 
+    def predict_step(self, images):
+        return  self(images)
 
 class TTRCNN(pl.LightningModule):
     def __init__(self, num_classes=4, **kwargs):
@@ -222,17 +224,18 @@ class TTRCNN(pl.LightningModule):
         loss_dict, preds = self(val_batch, mode='val')
         loss = sum([loss for loss in loss_dict.values()])
         self.log('val_loss', loss)
-    def predict_step(self, test_batch, batch_idx):
-        x = test_batch["img"]
 
-        outputs = model(test_batch, mode='test')
+    def predict_step(self, images):
+        test_batch = {'img': images}
+
+        outputs = self(test_batch, mode='test')
 
         seg_stack = []
         for out in outputs:
             masks = out['masks'].cpu().detach()
             seg = self.compute_segmentation(masks, out['labels'])
             seg_stack.append(seg.unsqueeze(0))
-        return torch.cat(seg_stack), outputs
+        return torch.cat(seg_stack)
 
     def compute_segmentation(self, masks, labels,thr=0.3):
         ## need a smoothing steps I think, very harsh lines
