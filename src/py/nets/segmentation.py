@@ -18,7 +18,7 @@ from monai.transforms import (
     ToTensord
 )
 
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 
 from pl_bolts.transforms.dataset_normalizations import (
     imagenet_normalization
@@ -112,6 +112,138 @@ class TTUNet(pl.LightningModule):
         # x = torch.argmax(x, dim=1, keepdim=True)
         # self.accuracy(x.reshape(-1, 1), y.reshape(-1, 1))
         # self.log("val_acc", self.accuracy, batch_size=batch_size)
+
+
+class TTRCNN(pl.LightningModule):
+    def __init__(self, num_classes=4, **kwargs):
+        super(TTRCNN, self).__init__()        
+        
+        self.save_hyperparameters()
+        
+        self.model = models.detection.maskrcnn_resnet50_fpn(weights=models.detection.MaskRCNN_ResNet50_FPN_Weights.DEFAULT)
+
+        self.num_classes = num_classes
+        in_features = self.model.roi_heads.box_predictor.cls_score.in_features
+        self.model.roi_heads.box_predictor = models.detection.faster_rcnn.FastRCNNPredictor(in_features, num_classes)
+
+        in_features_mask = self.model.roi_heads.mask_predictor.conv5_mask.in_channels
+        hidden_layer = 256
+        self.model.roi_heads.mask_predictor = models.detection.mask_rcnn.MaskRCNNPredictor(in_features_mask, hidden_layer, num_classes)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+        return optimizer
+
+    def compute_bb_mask(self, seg, pad=0.5):
+      shape = seg.shape[1:]
+      bbx = []
+      masks = []
+      for i in range(4):
+        
+        ij = torch.argwhere(seg.squeeze() == i)
+        mask = torch.zeros_like(seg)
+        mask[ seg == i] = 1
+
+        if len(ij) > 0:
+            bb = torch.tensor([0, 0, 0, 0])# xmin, ymin, xmax, ymax
+
+            bb[0] = torch.clip(torch.min(ij[:,1]) - shape[1]*pad, 0, shape[1])
+            bb[1] = torch.clip(torch.min(ij[:,0]) - shape[0]*pad, 0, shape[0])
+
+            bb[2] = torch.clip(torch.max(ij[:,1]) + shape[1]*pad, 0, shape[1])
+            bb[3] = torch.clip(torch.max(ij[:,0]) + shape[0]*pad, 0, shape[0])
+        else:
+            print("BAD BBX, full image")
+            bb = torch.tensor([0, 0, shape[1], shape[0]])# xmin, ymin, xmax, ymax
+        
+        bbx.append(bb.unsqueeze(0))
+        masks.append(mask)
+      return torch.cat(bbx), torch.cat(masks)
+
+    def forward(self, data, mode='train'):
+        images = data['img'].to('cuda:0')
+        # print(data)
+        if mode == 'train':
+
+            self.model.train()
+            segs = data['seg'].to('cuda:0')
+            targets = []
+            for seg in segs:
+                d = {}
+                box, masks = self.compute_bb_mask(seg)
+                d['boxes'] = box.to('cuda:0')
+                d['labels'] = torch.tensor([0,1,2,3]).to('cuda:0')
+                d['masks'] = masks.to('cuda:0')
+                targets.append(d)
+
+            losses = self.model(images, targets)
+            return losses
+
+        if mode == 'val': # get the boxes and losses
+            self.model.train()
+            with torch.no_grad():
+                segs = data['seg'].to('cuda:0')
+                targets = []
+                for seg in segs:
+                    d = {}
+                    box, masks = self.compute_bb_mask(seg)
+                    d['boxes'] = box.to('cuda:0')
+                    d['labels'] = torch.tensor([0,1,2,3]).to('cuda:0')
+                    d['masks'] = masks.to('cuda:0')
+                    targets.append(d)
+
+                losses = self.model(images, targets)
+                
+                self.model.eval()
+                preds = self.model(images)
+                self.model.train()
+                return [losses, preds]
+
+        elif mode == 'test': # prediction
+            output = self.model(images)
+
+            return output
+
+    def training_step(self, train_batch, batch_idx):
+        
+        x = train_batch["img"]
+        y = train_batch["seg"]
+        
+        loss_dict = self(train_batch)
+        loss = sum([loss for loss in loss_dict.values()])
+        self.log('train_loss', loss)
+                
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+        x = val_batch["img"]
+        y = val_batch["seg"]
+        
+        loss_dict, preds = self(val_batch, mode='val')
+        loss = sum([loss for loss in loss_dict.values()])
+        self.log('val_loss', loss)
+    def predict_step(self, test_batch, batch_idx):
+        x = test_batch["img"]
+
+        outputs = model(test_batch, mode='test')
+
+        seg_stack = []
+        for out in outputs:
+            masks = out['masks'].cpu().detach()
+            seg = self.compute_segmentation(masks, out['labels'])
+            seg_stack.append(seg.unsqueeze(0))
+        return torch.cat(seg_stack), outputs
+
+    def compute_segmentation(self, masks, labels,thr=0.3):
+        ## need a smoothing steps I think, very harsh lines
+        labels = labels.cpu().detach().numpy()
+        seg_mask = torch.zeros_like(masks[0]) 
+        for i in range(3):
+
+            seg_mask[ masks[i]> thr ] = labels[i]
+    
+        return seg_mask
+            
 
 class RandomRotate(nn.Module):
     def __init__(self, degrees, keys, interpolation, prob=0.5):        
