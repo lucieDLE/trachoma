@@ -117,11 +117,10 @@ class TTUNet(pl.LightningModule):
         return  self(images)
 
 class TTRCNN(pl.LightningModule):
-    def __init__(self, num_classes=4, **kwargs):
+    def __init__(self, num_classes=4, device='cuda', **kwargs):
         super(TTRCNN, self).__init__()        
         
         self.save_hyperparameters()
-        
         self.model = models.detection.maskrcnn_resnet50_fpn(weights=models.detection.MaskRCNN_ResNet50_FPN_Weights.DEFAULT)
 
         self.num_classes = num_classes
@@ -155,7 +154,6 @@ class TTRCNN(pl.LightningModule):
             bb[2] = torch.clip(torch.max(ij[:,1]) + shape[1]*pad, 0, shape[1])
             bb[3] = torch.clip(torch.max(ij[:,0]) + shape[0]*pad, 0, shape[0])
         else:
-            print("BAD BBX, full image")
             bb = torch.tensor([0, 0, shape[1], shape[0]])# xmin, ymin, xmax, ymax
         
         bbx.append(bb.unsqueeze(0))
@@ -163,19 +161,18 @@ class TTRCNN(pl.LightningModule):
       return torch.cat(bbx), torch.cat(masks)
 
     def forward(self, data, mode='train'):
-        images = data['img'].to('cuda:0')
-        # print(data)
+        images = data['img'].to(self.device)
         if mode == 'train':
 
+            segs = data['seg'].to(self.device)
             self.model.train()
-            segs = data['seg'].to('cuda:0')
             targets = []
             for seg in segs:
                 d = {}
                 box, masks = self.compute_bb_mask(seg)
-                d['boxes'] = box.to('cuda:0')
-                d['labels'] = torch.tensor([0,1,2,3]).to('cuda:0')
-                d['masks'] = masks.to('cuda:0')
+                d['boxes'] = box.to(self.device)
+                d['labels'] = torch.tensor([0,1,2,3]).to(self.device)
+                d['masks'] = masks.to(self.device)
                 targets.append(d)
 
             losses = self.model(images, targets)
@@ -184,14 +181,14 @@ class TTRCNN(pl.LightningModule):
         if mode == 'val': # get the boxes and losses
             self.model.train()
             with torch.no_grad():
-                segs = data['seg'].to('cuda:0')
+                segs = data['seg'].to(self.device)
                 targets = []
                 for seg in segs:
                     d = {}
                     box, masks = self.compute_bb_mask(seg)
-                    d['boxes'] = box.to('cuda:0')
-                    d['labels'] = torch.tensor([0,1,2,3]).to('cuda:0')
-                    d['masks'] = masks.to('cuda:0')
+                    d['boxes'] = box.to(self.device)
+                    d['labels'] = torch.tensor([0,1,2,3]).to(self.device)
+                    d['masks'] = masks.to(self.device)
                     targets.append(d)
 
                 losses = self.model(images, targets)
@@ -202,6 +199,7 @@ class TTRCNN(pl.LightningModule):
                 return [losses, preds]
 
         elif mode == 'test': # prediction
+            self.model.eval()
             output = self.model(images)
 
             return output
