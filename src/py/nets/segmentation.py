@@ -386,3 +386,60 @@ class MobileYOLO(pl.LightningModule):
         loss = self.loss_fn(x_bb, Y_bb.to(torch.float32))
                 
         self.log('test_loss', loss, sync_dist=True)
+
+class FasterRCNN(pl.LightningModule):
+    def __init__(self, num_classes=4, device='cuda', **kwargs):
+        super(FasterRCNN, self).__init__()        
+        
+        self.save_hyperparameters()
+        self.model = models.detection.fasterrcnn_resnet50_fpn_v2(weights=models.detection.FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT)
+
+        self.num_classes = num_classes
+        in_features = self.model.roi_heads.box_predictor.cls_score.in_features
+        self.model.roi_heads.box_predictor = models.detection.faster_rcnn.FastRCNNPredictor(in_features, num_classes)
+
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+        return optimizer
+
+    def forward(self, images, targets=None, mode='train'):
+        images = images.to(self.device)
+        if mode == 'train':
+            self.model.train()
+            losses = self.model(images, targets)
+            return losses
+
+        if mode == 'val': # get the boxes and losses
+            with torch.no_grad():
+                self.model.train()
+                losses = self.model(images, targets)
+                
+                self.model.eval()
+                preds = self.model(images)
+                self.model.train()
+                return [losses, preds]
+
+        elif mode == 'test': # prediction
+            self.model.eval()
+            output = self.model(images)
+
+            return output
+
+    def training_step(self, train_batch, batch_idx):
+        
+        loss_dict = self(train_batch[0], train_batch[1])
+        loss = sum([loss for loss in loss_dict.values()])
+        self.log('train_loss', loss)
+                
+        return loss
+
+    def validation_step(self, val_batch, batch_idx):
+                
+        loss_dict, preds = self(val_batch[0], val_batch[1], mode='val')
+        loss = sum([loss for loss in loss_dict.values()])
+        self.log('val_loss', loss)
+
+    def predict_step(self, images):
+
+        return self(images, mode='test')
