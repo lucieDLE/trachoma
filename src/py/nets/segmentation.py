@@ -437,8 +437,14 @@ class FasterRCNN(pl.LightningModule):
     def validation_step(self, val_batch, batch_idx):
                 
         loss_dict, preds = self(val_batch[0], val_batch[1], mode='val')
-        loss = sum([loss for loss in loss_dict.values()])
-        self.log('val_loss', loss)
+        total_loss = 0
+        for loss_name in loss_dict.keys():
+        # ['loss_classifier', 'loss_box_reg', 'loss_mask', 'loss_objectness', 'loss_rpn_box_reg'])
+            loss = loss_dict[loss_name]
+            total_loss += loss
+            self.log(f'val/{loss_name}', loss, sync_dist=True)
+            # totloss = sum([loss for loss in loss_dict.values()])            
+        self.log('val_loss', total_loss,sync_dist=True,batch_size=self.hparams.batch_size)
 
     def predict_step(self, images):
 
