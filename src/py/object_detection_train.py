@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES']="0"
+# os.environ['CUDA_VISIBLE_DEVICES']="0"
 import argparse
 
 import math
@@ -7,9 +7,9 @@ import pandas as pd
 import numpy as np 
 
 import torch
-
+import pdb
 from nets.segmentation import FasterRCNN,TTRCNN
-from loaders.tt_dataset import TTDataModuleBX, TrainTransformsSeg, EvalTransformsSeg
+from loaders.tt_dataset import TTDataModuleBX, TrainTransformsSeg, EvalTransformsSeg,BBXImageTrainTransform, BBXImageEvalTransform, BBXImageTestTransform
 from callbacks.logger import SegImageLoggerNeptune, MaskRCNNImageLoggerNeptune,FasterRCNNImageLoggerNeptune
 
 from lightning import Trainer
@@ -53,11 +53,12 @@ def main(args):
     # df_val = df_val.loc[~df_val['label'].isin(['Healthy', 'Reject'])].reset_index()
     # df_train = df_train.loc[~df_train['label'].isin(['Healthy', 'Reject'])].reset_index()
 
-    num_classes = len(df_train[args.class_column].unique())
+    num_classes = len(df_train[args.class_column].unique()) #+1
 
     print(df_train[args.class_column].value_counts())
 
-    ttdata = TTDataModuleBX(df_train, df_val, df_test, batch_size=args.batch_size, num_workers=args.num_workers, img_column=args.img_column, mount_point=args.mount_point)
+    ttdata = TTDataModuleBX(df_train, df_val, df_test, batch_size=args.batch_size, num_workers=args.num_workers, img_column=args.img_column, 
+                            mount_point=args.mount_point, train_transform=BBXImageTrainTransform(), valid_transform=BBXImageEvalTransform(), test_transform=BBXImageTestTransform())
 
 
     checkpoint_callback = ModelCheckpoint(
@@ -73,6 +74,16 @@ def main(args):
         model = FasterRCNN.load_from_checkpoint(args.model, num_classes=num_classes, **vars(args), strict=False)
     else:
         model = FasterRCNN(num_classes=num_classes,  **vars(args))
+    
+    # Freeze backbone (except last two layers)
+    for param in model.model.backbone.body.layer1.parameters():
+        param.requires_grad = False
+    for param in model.model.backbone.body.layer2.parameters():
+        param.requires_grad = False
+    for param in model.model.backbone.body.layer3.parameters():
+        param.requires_grad = False
+    for param in model.model.backbone.body.layer4.parameters():
+        param.requires_grad = False
     
     early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=args.patience, verbose=True, mode="min")
     logger = None
@@ -91,7 +102,10 @@ def main(args):
         devices=torch.cuda.device_count(), 
         accelerator="gpu", 
         strategy=DDPStrategy(find_unused_parameters=False),
-        log_every_n_steps=args.log_every_n_steps
+        log_every_n_steps=args.log_every_n_steps,
+        gradient_clip_val=0.8,
+        val_check_interval=0.4,
+
     )
     trainer.fit(model, datamodule=ttdata, ckpt_path=args.model)
 
@@ -108,7 +122,7 @@ if __name__ == '__main__':
     input_group.add_argument('--csv_valid', required=True, type=str, help='Valid CSV')
     input_group.add_argument('--csv_test', required=True, type=str, help='Test CSV')
     input_group.add_argument('--img_column', type=str, default="img_path", help='Name of image column in csv')
-    input_group.add_argument('--class_column', type=str, default="seg_path", help='Name of segmentation column in csv')
+    input_group.add_argument('--class_column', type=str, default="class", help='Name of segmentation column in csv')
     input_group.add_argument('--label_column', type=str, default="label", help='Name of label column in csv')
     input_group.add_argument('--drop_labels', type=str, default=None, nargs='+', help='drop labels in dataframe')
     input_group.add_argument('--concat_labels', type=str, default=None, nargs='+', help='concat labels in dataframe')
@@ -120,7 +134,7 @@ if __name__ == '__main__':
     hparams_group.add_argument('--steps', help='Max number of steps per epoch', type=int, default=-1)    
     hparams_group.add_argument('--batch_size', help='Batch size', type=int, default=256)
 
-
+    hparams_group.add_argument('--pad', help='size of bounding box', type=int, default=64)
     
     logger_group = parser.add_argument_group('Logger')
     logger_group.add_argument('--log_every_n_steps', help='Log every n steps', type=int, default=1)

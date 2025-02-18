@@ -13,6 +13,7 @@ import monai
 from monai.networks.nets import AutoEncoder
 from monai.networks.blocks import Convolution
 from monai.metrics import DiceMetric
+from torchvision.models.detection.rpn import AnchorGenerator
 
 from monai.transforms import (
     ToTensord
@@ -121,7 +122,15 @@ class TTRCNN(pl.LightningModule):
         super(TTRCNN, self).__init__()        
         
         self.save_hyperparameters()
-        self.model = models.detection.maskrcnn_resnet50_fpn(weights=models.detection.MaskRCNN_ResNet50_FPN_Weights.DEFAULT)
+        self.model = models.detection.maskrcnn_resnet50_fpn(weights=models.detection.MaskRCNN_ResNet50_FPN_Weights.DEFAULT,
+                                                            min_size=512,
+                                                            max_size=512,
+                                                            rpn_fg_iou_thresh=0.5,
+                                                            rpn_nms_thr = 0.8,
+                                                            box_detections_per_img = 4,
+                                                            rpn_post_nms_top_n_train=50,
+                                                            rpn_post_nms_top_n_test=50,
+                                                            )
 
         self.num_classes = num_classes
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
@@ -139,7 +148,7 @@ class TTRCNN(pl.LightningModule):
       shape = seg.shape[1:]
       bbx = []
       masks = []
-      for i in range(4):
+      for i in range(1,4): ## remove the background 
         
         ij = torch.argwhere(seg.squeeze() == i)
         mask = torch.zeros_like(seg)
@@ -148,12 +157,13 @@ class TTRCNN(pl.LightningModule):
         if len(ij) > 0:
             bb = torch.tensor([0, 0, 0, 0])# xmin, ymin, xmax, ymax
 
-            bb[0] = torch.clip(torch.min(ij[:,1]) - shape[1]*pad, 0, shape[1])
-            bb[1] = torch.clip(torch.min(ij[:,0]) - shape[0]*pad, 0, shape[0])
+            bb[0] = torch.clip(torch.min(ij[:,1]) - 5, 0, shape[1])
+            bb[1] = torch.clip(torch.min(ij[:,0]) - 5, 0, shape[0])
 
-            bb[2] = torch.clip(torch.max(ij[:,1]) + shape[1]*pad, 0, shape[1])
-            bb[3] = torch.clip(torch.max(ij[:,0]) + shape[0]*pad, 0, shape[0])
+            bb[2] = torch.clip(torch.max(ij[:,1]) + 5, 0, shape[1])
+            bb[3] = torch.clip(torch.max(ij[:,0]) + 5, 0, shape[0])
         else:
+            print("problem")
             bb = torch.tensor([0, 0, shape[1], shape[0]])# xmin, ymin, xmax, ymax
         
         bbx.append(bb.unsqueeze(0))
@@ -169,9 +179,9 @@ class TTRCNN(pl.LightningModule):
             targets = []
             for seg in segs:
                 d = {}
-                box, masks = self.compute_bb_mask(seg)
+                box, masks = self.compute_bb_mask(seg, pad=0.01)
                 d['boxes'] = box.to(self.device)
-                d['labels'] = torch.tensor([0,1,2,3]).to(self.device)
+                d['labels'] = torch.tensor([1,2,3]).to(self.device)
                 d['masks'] = masks.to(self.device)
                 targets.append(d)
 
@@ -185,7 +195,7 @@ class TTRCNN(pl.LightningModule):
                 targets = []
                 for seg in segs:
                     d = {}
-                    box, masks = self.compute_bb_mask(seg)
+                    box, masks = self.compute_bb_mask(seg, pad=0.01)
                     d['boxes'] = box.to(self.device)
                     d['labels'] = torch.tensor([0,1,2,3]).to(self.device)
                     d['masks'] = masks.to(self.device)
@@ -220,8 +230,15 @@ class TTRCNN(pl.LightningModule):
         y = val_batch["seg"]
         
         loss_dict, preds = self(val_batch, mode='val')
-        loss = sum([loss for loss in loss_dict.values()])
-        self.log('val_loss', loss)
+        total_loss = 0
+        for loss_name in loss_dict.keys():
+        # ['loss_classifier', 'loss_box_reg', 'loss_mask', 'loss_objectness', 'loss_rpn_box_reg'])
+            loss = loss_dict[loss_name]
+            total_loss += loss
+            self.log(f'val/{loss_name}', loss, sync_dist=True)
+            # totloss = sum([loss for loss in loss_dict.values()])
+  
+        self.log('val_loss', total_loss,sync_dist=True,batch_size=self.hparams.batch_size)
 
     def predict_step(self, images):
         test_batch = {'img': images}
@@ -239,10 +256,8 @@ class TTRCNN(pl.LightningModule):
         ## need a smoothing steps I think, very harsh lines
         labels = labels.cpu().detach().numpy()
         seg_mask = torch.zeros_like(masks[0]) 
-        for i in range(3):
-
+        for i in range(masks.shape[0]):
             seg_mask[ masks[i]> thr ] = labels[i]
-    
         return seg_mask
             
 
@@ -392,15 +407,37 @@ class FasterRCNN(pl.LightningModule):
         super(FasterRCNN, self).__init__()        
         
         self.save_hyperparameters()
-        self.model = models.detection.fasterrcnn_resnet50_fpn_v2(weights=models.detection.FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT)
 
+
+        # anchor_generator = AnchorGenerator(sizes=((16, 32, 64, 128, 256),), aspect_ratios=((0.5, 1.0, 2.0),))
+
+
+        self.model = models.detection.fasterrcnn_resnet50_fpn_v2(weights=models.detection.FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT,
+                                                                 min_size=128,
+                                                                 max_size=1024,
+
+                                                                 rpn_fg_iou_thresh=0.5,
+                                                                 rpn_bg_iou_thresh = 0.2,
+                                                                 rpn_nms_thr = 0.3,
+                                                                 rpn_positive_fraction=0.6,
+                                                                 rpn_post_nms_top_n_train=20,
+                                                                 rpn_post_nms_top_n_test=10,
+
+                                                                 box_detections_per_img = 15,
+                                                                 )
+        # loss names ['classifier', 'box_reg', 'objectness', 'rpn_box_reg'])
+        self.loss_weights =  [1.0, 1.0, 1.0, 1.0 ]
+
+        
         self.num_classes = num_classes
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
         self.model.roi_heads.box_predictor = models.detection.faster_rcnn.FastRCNNPredictor(in_features, num_classes)
+        # self.model.roi_heads.detections_per_img = 50  # Default: 300
+        # self.model.roi_heads.box_batch_size_per_image = 512
 
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=0.01)
         return optimizer
 
     def forward(self, images, targets=None, mode='train'):
@@ -429,20 +466,24 @@ class FasterRCNN(pl.LightningModule):
     def training_step(self, train_batch, batch_idx):
         
         loss_dict = self(train_batch[0], train_batch[1])
-        loss = sum([loss for loss in loss_dict.values()])
-        self.log('train_loss', loss)
+        total_loss = 0
+        for w, n in zip(self.loss_weights, loss_dict.keys()):
+            loss = loss_dict[n]
+            total_loss += w*loss
+            self.log(f'train/{n}', loss, sync_dist=True)
+            # totloss = sum([loss for loss in loss_dict.values()])            
+        self.log('train_loss', total_loss,sync_dist=True,batch_size=self.hparams.batch_size)
                 
-        return loss
+        return total_loss
 
     def validation_step(self, val_batch, batch_idx):
                 
         loss_dict, preds = self(val_batch[0], val_batch[1], mode='val')
         total_loss = 0
-        for loss_name in loss_dict.keys():
-        # ['loss_classifier', 'loss_box_reg', 'loss_mask', 'loss_objectness', 'loss_rpn_box_reg'])
-            loss = loss_dict[loss_name]
-            total_loss += loss
-            self.log(f'val/{loss_name}', loss, sync_dist=True)
+        for w, n in zip(self.loss_weights, loss_dict.keys()):
+            loss = loss_dict[n]
+            total_loss += w*loss
+            self.log(f'val/{n}', loss, sync_dist=True)
             # totloss = sum([loss for loss in loss_dict.values()])            
         self.log('val_loss', total_loss,sync_dist=True,batch_size=self.hparams.batch_size)
 

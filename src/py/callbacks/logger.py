@@ -67,29 +67,73 @@ class MaskRCNNImageLoggerNeptune(Callback):
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, unused=0):
         
         if batch_idx % self.log_steps == 0:
-            
-            img1 = batch["img"][0]
-            img2 = batch["seg"][0]
-                        
-            fig = plt.figure(figsize=(7, 9))
-            ax = plt.imshow(img2.permute(1, 2, 0).cpu().detach().numpy())
-            trainer.logger.experiment["images/seg"].upload(fig)
+            IDX = 4
+            img1 = batch["img"][IDX]
+            img2 = batch["seg"][IDX]
+
+            # ---------  ground truth segmentation ---------
+            fig,ax = plt.subplots(1)
+            # ax = fig.add_subplot()
+
+            ax.imshow(img2.permute(1, 2, 0).cpu().detach().numpy())
+            trainer.logger.experiment["fig/seg"].upload(fig)
             plt.close()
 
+            # --------- ground truth boxes ---------       
+            boxes, masks = pl_module.compute_bb_mask(img2, pad=0)
+            for box in boxes:
+                x1, y1, x2, y2 = box.cpu().detach().numpy()
+                width, height = x2 - x1, y2 - y1
+                rect = Rectangle((x1, y1), width, height, fill=False, color='red', linewidth=1)
+                ax.add_patch(rect)  # Add the box
+            ax.axis('off')  # Optional: Turn off axes for better visualization
+
+            plt.tight_layout()
+            trainer.logger.experiment["fig/input_boxes"].upload(fig)
+            plt.close()
+
+            # --------- ground truth individual mask  ---------         
+            fig, axs = plt.subplots(1, 3)
+            axs = axs.flatten()
+            masks = masks.cpu().detach()
+            for ax, mask in zip(axs, masks):
+                ax.imshow(mask)  # Display the image
+                ax.axis('off')  # Optional: Turn off axes for better visualization
+            plt.tight_layout()
+            trainer.logger.experiment["fig/input_masks"].upload(fig)
+            plt.close()
+            
             with torch.no_grad():
                 x_hat = pl_module(batch, mode='test')
-                boxes = x_hat[0]['boxes']
+                boxes = x_hat[IDX]['boxes']
                 fig = plt.figure(figsize=(7, 9))
                 plt.imshow(img1.permute(1,2,0).cpu().detach().numpy())
                 ax = plt.gca()
                 for box in boxes:
-                    y1, x1, y2, x2 = box.cpu().detach().numpy()
+                    x1, y1, x2, y2 = box.cpu().detach().numpy()
                     width, height = x2 - x1, y2 - y1
                     rect = Rectangle((x1, y1), width, height, fill=False, color='red')
                     ax.add_patch(rect)
 
-                trainer.logger.experiment["images/boxes"].upload(fig)
+                trainer.logger.experiment["fig/pred_boxes"].upload(fig)
                 plt.close()
+
+            # --------- masks prediction  ---------         
+            pred_masks = x_hat[IDX]['masks'].cpu().detach()
+            pred_seg = self.compute_segmentation(pred_masks, x_hat[IDX]['labels'])
+            fig = plt.figure(figsize=(7, 9))
+            plt.imshow(pred_seg.permute(1,2,0).cpu().detach().numpy())
+            trainer.logger.experiment["fig/pred_seg"].upload(fig)
+            plt.close()
+    
+    def compute_segmentation(self, masks, labels,thr=0.3):
+        ## need a smoothing steps I think, very harsh lines
+        labels = labels.cpu().detach().numpy()
+        seg_mask = torch.zeros(masks.shape[1:])
+        for i in range(masks.shape[0]):
+            seg_mask[ masks[i]> thr ] = labels[i]
+        return seg_mask
+            
 
 class FasterRCNNImageLoggerNeptune(Callback):
     def __init__(self, log_steps=0,max_num_image=8):
@@ -113,12 +157,13 @@ class FasterRCNNImageLoggerNeptune(Callback):
 
 
             for ax, img, boxes in zip(axs, images, boxes_list):
+                img = torch.clip(img, 0, 1)
                 ax.imshow(img.permute(1, 2, 0).cpu().numpy())  # Display the image
 
                 for box in boxes:
                     x1, y1, x2, y2 = box.cpu().detach().numpy()
                     width, height = x2 - x1, y2 - y1
-                    rect = Rectangle((x1, y1), width, height, fill=False, color='red', linewidth=3)
+                    rect = Rectangle((x1, y1), width, height, fill=False, color='red', linewidth=1)
                     ax.add_patch(rect)  # Add the box
                 ax.axis('off')  # Optional: Turn off axes for better visualization
 
@@ -135,11 +180,12 @@ class FasterRCNNImageLoggerNeptune(Callback):
                 boxes_list = [target['boxes'] for target in x_hat]
 
                 for ax, img, boxes in zip(axs, images, boxes_list):
+                    img = torch.clip(img, 0, 1)
                     ax.imshow(img.permute(1, 2, 0).cpu().numpy())  # Display the image
                     for box in boxes:
                         x1, y1, x2, y2 = box.cpu().detach().numpy()
                         width, height = x2 - x1, y2 - y1
-                        rect = Rectangle((x1, y1), width, height, fill=False, color='red', linewidth=3)
+                        rect = Rectangle((x1, y1), width, height, fill=False, color='red', linewidth=1)
                         ax.add_patch(rect)  # Add the box
                     ax.axis('off')  # Optional: Turn off axes for better visualization
 
@@ -162,14 +208,14 @@ class FasterRCNNImageLoggerNeptune(Callback):
             images = [img for img in imgs]
             boxes_list = [target['boxes'] for target in targets]
 
-
             for ax, img, boxes in zip(axs, images, boxes_list):
+                img = torch.clip(img, 0, 1)
                 ax.imshow(img.permute(1, 2, 0).cpu().numpy())  # Display the image
 
                 for box in boxes:
                     x1, y1, x2, y2 = box.cpu().detach().numpy()
                     width, height = x2 - x1, y2 - y1
-                    rect = Rectangle((x1, y1), width, height, fill=False, color='red', linewidth=3)
+                    rect = Rectangle((x1, y1), width, height, fill=False, color='red', linewidth=1)
                     ax.add_patch(rect)  # Add the box
                 ax.axis('off')  # Optional: Turn off axes for better visualization
 
@@ -186,11 +232,12 @@ class FasterRCNNImageLoggerNeptune(Callback):
                 boxes_list = [target['boxes'] for target in x_hat]
 
                 for ax, img, boxes in zip(axs, images, boxes_list):
+                    img = torch.clip(img, 0, 1)
                     ax.imshow(img.permute(1, 2, 0).cpu().numpy())  # Display the image
                     for box in boxes:
                         x1, y1, x2, y2 = box.cpu().detach().numpy()
                         width, height = x2 - x1, y2 - y1
-                        rect = Rectangle((x1, y1), width, height, fill=False, color='red', linewidth=3)
+                        rect = Rectangle((x1, y1), width, height, fill=False, color='red', linewidth=1)
                         ax.add_patch(rect)  # Add the box
                     ax.axis('off')  # Optional: Turn off axes for better visualization
 
