@@ -103,8 +103,6 @@ class TTDatasetBX(Dataset):
         df_filtered = df_patches[(df_patches['x_patch'] >= bbx_eye[0].numpy()) & (df_patches['x_patch'] <= bbx_eye[2].numpy())]
         df_patches = df_filtered[(df_filtered['y_patch'] >= bbx_eye[1].numpy()) & (df_filtered['y_patch'] <= bbx_eye[3].numpy())]
 
-        ## for training -> removing some overlap -> otherwise confusion to learn if too close
-        # df_patches = df_filtered.sample(n=min(8, len(df_filtered)))
         
         bbx, classes = [], []
         for idx, row in df_patches.iterrows():
@@ -131,7 +129,7 @@ class TTDatasetBX(Dataset):
         aug_image = augmented['image']
         aug_image = torch.tensor(aug_image).permute(2,0,1)
 
-        indices = nms(aug_coords, torch.ones_like(aug_coords[:,0]), iou_threshold=.6) ## iou as args
+        indices = nms(aug_coords, 0.5*torch.ones_like(aug_coords[:,0]), iou_threshold=.5) ## iou as args
         return {"img": aug_image, "labels": classes[indices], "boxes": aug_coords[indices] }
 
 
