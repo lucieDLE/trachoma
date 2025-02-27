@@ -452,11 +452,11 @@ class CustomRoIHeads(RoIHeads):
 
             # weighted-CE
             if self.hparams.loss_type == 'cross-entropy':
-                loss_classifier = F.cross_entropy(class_logits, labels, weight=self.hparams.class_weights)
+                loss_classifier = F.cross_entropy(class_logits, labels, weight=self.class_weights)
 
             # focal loss
             elif self.hparams.loss_type == 'focal':
-                yhot = nn.functional.one_hot(labels, num_classes=len(self.hparams.class_weights)).float()
+                yhot = nn.functional.one_hot(labels, num_classes=len(self.class_weights)).float()
                 loss_classifier = self.focal_loss(class_logits, yhot)
 
             losses = {"loss_classifier": loss_classifier, "loss_box_reg": loss_box_reg}
@@ -487,9 +487,9 @@ class FasterRCNN(pl.LightningModule):
                                                             #  rpn_score_thresh=0.5, # 0.5
                                                              rpn_nms_thr = 0.2, # 0.3
                                                             #  rpn_positive_fraction=0.2, #0.2
-                                                             rpn_post_nms_top_n_train=2000, # number of proposal to keep after nms 100
-                                                             rpn_post_nms_top_n_test=1000, # 50
-                                                             box_detections_per_img=25,  # final number of boxes (doesn't seem to work)
+                                                             rpn_post_nms_top_n_train=200, # number of proposal to keep after nms 100
+                                                             rpn_post_nms_top_n_test=100, # 50
+                                                             box_detections_per_img=25,
                                                             #  box_positive_sample = 0.7
                                                              )
 

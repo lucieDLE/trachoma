@@ -36,7 +36,7 @@ def remove_labels(df, args):
     df.loc[ df[args.label_column] == 'Reject', args.class_column]  = 0
     df.loc[ df[args.label_column] == 'Short Incision', args.class_column]  = 1
 
-    # print(f"{df[[args.label_column, args.class_column]].drop_duplicates()}")
+    print(f"{df[[args.label_column, args.class_column]].drop_duplicates()}")
     return df.reset_index()
 
 def main(args):
@@ -82,22 +82,22 @@ def main(args):
     else:
         model = FasterRCNN(**vars(args))
     
-    for param in model.model.backbone.parameters():
-        param.requires_grad = False
+    # for param in model.model.backbone.parameters():
+    #     param.requires_grad = False
 
     # Train only the RPN and classification head
     for param in model.model.rpn.parameters():
-        param.requires_grad = True
+        param.requires_grad = False
     for param in model.model.roi_heads.parameters():
-        param.requires_grad = True
+        param.requires_grad = False
 
-    # # Freeze backbone (except last two layers)
-    # for param in model.model.backbone.body.layer1.parameters():
-    #     param.requires_grad = False
-    # for param in model.model.backbone.body.layer2.parameters():
-    #     param.requires_grad = False
-    # for param in model.model.backbone.body.layer3.parameters():
-    #     param.requires_grad = True
+    # Freeze backbone (except last two layers)
+    for param in model.model.backbone.body.layer1.parameters():
+        param.requires_grad = False
+    for param in model.model.backbone.body.layer2.parameters():
+        param.requires_grad = False
+    for param in model.model.backbone.body.layer3.parameters():
+        param.requires_grad = True
     for param in model.model.backbone.body.layer4.parameters():
         param.requires_grad = True
     
