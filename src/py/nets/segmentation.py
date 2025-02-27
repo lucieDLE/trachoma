@@ -409,28 +409,16 @@ class MobileYOLO(pl.LightningModule):
 # Define custom RoIHeads with class weights. Need forward pass to access needed data.
 # Re-apply functions to get the labels. Needed because shapes are differents -> class logits has a 
 # shape matching the number of regions proposed (n=100) and not the number of boxes passed in the batch 
-# So need to compute the labels of these regions.
-#  Then add weights to cross entropy
-# if no changes or after testing it, change cross entropy to focal loss
 class CustomRoIHeads(RoIHeads):
     def __init__(self, *args, hparams=None, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.hparams = hparams
         self.class_weights = torch.tensor(self.hparams.class_weights, dtype=torch.float32, device='cuda')
-        self.focal_loss = FocalLoss(alpha=0.25, gamma=2.0, weights=self.class_weights)
+        self.ce_loss = nn.CrossEntropyLoss(weight=self.class_weights, label_smoothing=0.1)
 
     def forward(self, features, proposals, image_shapes, targets=None):
         result = []
-
-        # Modify the classification loss
-        # detection, losses = super().forward(features, proposals, image_shapes, targets)
-        # if self.training and targets is not None:
-        #     # Extract logits from RoIHead code on pytorch github
-        #     proposals, _, labels, _ = self.select_training_samples(proposals, targets)
-        #     box_features = self.box_roi_pool(features, proposals, image_shapes)
-        #     box_features = self.box_head(box_features)
-        #     class_logits, _ = self.box_predictor(box_features)
 
         if self.training:
             proposals, matched_idxs, labels, regression_targets = self.select_training_samples(proposals, targets)
@@ -449,15 +437,7 @@ class CustomRoIHeads(RoIHeads):
             _, loss_box_reg = fastrcnn_loss(class_logits, box_regression, labels, regression_targets)
             labels = torch.cat(labels, dim=0)
 
-
-            # weighted-CE
-            if self.hparams.loss_type == 'cross-entropy':
-                loss_classifier = F.cross_entropy(class_logits, labels, weight=self.class_weights)
-
-            # focal loss
-            elif self.hparams.loss_type == 'focal':
-                yhot = nn.functional.one_hot(labels, num_classes=len(self.class_weights)).float()
-                loss_classifier = self.focal_loss(class_logits, yhot)
+            loss_classifier = self.ce_loss(class_logits, labels)
 
             losses = {"loss_classifier": loss_classifier, "loss_box_reg": loss_box_reg}
         else:
@@ -471,32 +451,24 @@ class CustomRoIHeads(RoIHeads):
 class FasterRCNN(pl.LightningModule):
     def __init__(self, device='cuda', **kwargs):
         super(FasterRCNN, self).__init__()
-        ### should create model parser to be able to pass model args (thr, nms....) like in ShapeAXI
         
         self.save_hyperparameters()
-
-
-        # anchor_generator = AnchorGenerator(sizes=((16, 32, 64, 128, 256),), aspect_ratios=((0.5, 1.0, 2.0),))
 
 
         self.model = models.detection.fasterrcnn_resnet50_fpn_v2(weights=models.detection.FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT,
                                                              min_size=128,
                                                              max_size=1024,
-                                                             rpn_fg_iou_thresh=0.4, #0.4 
-                                                             rpn_bg_iou_thresh = 0.1, # 0.1
-                                                            #  rpn_score_thresh=0.5, # 0.5
-                                                             rpn_nms_thr = 0.2, # 0.3
-                                                            #  rpn_positive_fraction=0.2, #0.2
-                                                             rpn_post_nms_top_n_train=200, # number of proposal to keep after nms 100
-                                                             rpn_post_nms_top_n_test=100, # 50
+                                                             rpn_fg_iou_thresh=0.4,
+                                                             rpn_bg_iou_thresh = 0.1,
+                                                             rpn_nms_thr = 0.2,
+                                                             rpn_post_nms_top_n_train=200,
+                                                             rpn_post_nms_top_n_test=100,
                                                              box_detections_per_img=25,
-                                                            #  box_positive_sample = 0.7
                                                              )
 
 
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
 
-        # Replace RoIHeads with the custom one
         self.model.roi_heads = CustomRoIHeads(self.model.roi_heads.box_roi_pool,
                                               self.model.roi_heads.box_head,
                                               models.detection.faster_rcnn.FastRCNNPredictor(in_features, self.hparams.out_features),
@@ -546,7 +518,6 @@ class FasterRCNN(pl.LightningModule):
             loss = loss_dict[n]
             total_loss += w*loss
             self.log(f'train/{n}', loss, sync_dist=True)
-            # totloss = sum([loss for loss in loss_dict.values()])            
         self.log('train_loss', total_loss,sync_dist=True,batch_size=self.hparams.batch_size)
                 
         return total_loss
@@ -559,7 +530,6 @@ class FasterRCNN(pl.LightningModule):
             loss = loss_dict[n]
             total_loss += w*loss
             self.log(f'val/{n}', loss, sync_dist=True)
-            # totloss = sum([loss for loss in loss_dict.values()])            
         self.log('val_loss', total_loss,sync_dist=True,batch_size=self.hparams.batch_size)
 
     def predict_step(self, images):
