@@ -34,7 +34,6 @@ def remove_labels(df, args):
 
     df[args.class_column] = df[args.class_column].map(class_mapping)
     df.loc[ df[args.label_column] == 'Reject', args.class_column]  = 0
-    df.loc[ df[args.label_column] == 'Short Incision', args.class_column]  = 1
 
     print(f"{df[[args.label_column, args.class_column]].drop_duplicates()}")
     return df.reset_index()
