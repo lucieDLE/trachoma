@@ -110,3 +110,37 @@ class FocalLoss(nn.Module):
 			return F_loss.sum()
 		else:
 			return F_loss
+		
+def remove_labels(df, class_column, label_column, drop_labels=None, concat_labels=None):
+  if drop_labels is not None:
+      df = df[ ~ df[label_column].isin(drop_labels)]
+
+  if concat_labels is not None:
+      replacement_val = df.loc[ df[label_column] == concat_labels[0]][class_column].unique()
+      df.loc[ df[label_column].isin(concat_labels), class_column ] = replacement_val[0]
+
+  unique_classes = sorted(df[class_column].unique())
+  class_mapping = {value: idx+1 for idx, value in enumerate(unique_classes)}
+
+  df[class_column] = df[class_column].map(class_mapping)
+  return df.reset_index()
+
+
+def filter_targets_indices(targets, indices, detach=False):
+  for k in targets.keys():
+    if detach == True:
+      targets[k] = targets[k][indices].cpu().detach()
+    else:
+      targets[k] = targets[k][indices]
+  return targets
+
+def convert_targets_numpy(targets):
+  for k in targets.keys():
+    targets[k] = targets[k].squeeze(0).cpu().detach().numpy()
+  return targets
+
+def sort_values(targets):
+  boxes = targets['boxes']
+  _, indices = torch.sort(boxes[:,0])
+
+  return filter_targets_indices(targets, indices)
