@@ -66,16 +66,16 @@ class TTDatasetSeg(Dataset):
         return d
 
 class TTDatasetBX(Dataset):
-    def __init__(self, df, mount_point = "./", transform=None, img_column="img_path", seg_column='seg_path', class_column = 'class'):
+    def __init__(self, df, mount_point = "./", transform=None, img_column="img_path", class_column = 'class',sev_column='sev'):
         self.df = df
         self.mount_point = mount_point
         self.transform = transform
         self.img_column = img_column
-        self.seg_column = seg_column
         self.class_column = class_column
+        self.severity_column = sev_column
         self.transform = transform
 
-        self.df_subject = self.df[[img_column,'class']].drop_duplicates()
+        self.df_subject = self.df[img_column].drop_duplicates().reset_index()
         self.target_size = (768, 1536)
 
     def __len__(self):
@@ -88,6 +88,7 @@ class TTDatasetBX(Dataset):
         self.seg_path = img_path.replace('img', 'seg').replace('.jpg', '.nrrd')
 
         df_patches = self.df.loc[ self.df[self.img_column] == subject]
+        severity = torch.tensor(df_patches.iloc[0][self.severity_column]).to(torch.long)
 
         seg = torch.tensor(np.squeeze(sitk.GetArrayFromImage(sitk.ReadImage(self.seg_path)).copy())).to(torch.float32)
         img = torch.tensor(np.squeeze(sitk.GetArrayFromImage(sitk.ReadImage(img_path)).copy())).to(torch.float32)
@@ -106,22 +107,26 @@ class TTDatasetBX(Dataset):
 
         
         bbx, classes = [], []
-        for idx, row in df_patches.iterrows():
-            class_idx =  torch.tensor(row[self.class_column]).to(torch.long)
+        if not df_patches.empty:
+            for k, row in df_patches.iterrows():
+                class_idx =  torch.tensor(row[self.class_column]).to(torch.long)
 
-            x, y = row['x_patch'], row['y_patch']
-        
-            cropped_x, cropped_y = x - bbx_eye[0], y -bbx_eye[1]
-
-            # ensure coordinates in range
-            box = torch.tensor([max((cropped_x-2*self.pad/3), 0),
-                                max((cropped_y-5*self.pad/3), 0),
-                                min((cropped_x+2*self.pad/3), img_cropped.shape[2]),
-                                min((cropped_y+self.pad/3), img_cropped.shape[1])])
+                x, y = row['x_patch'], row['y_patch']
             
-            classes.append(class_idx.unsqueeze(0))
-            bbx.append(box.unsqueeze(0))
+                cropped_x, cropped_y = x - bbx_eye[0], y -bbx_eye[1]
 
+                # ensure coordinates in range
+                box = torch.tensor([max((cropped_x-2*self.pad/3), 0),
+                                    max((cropped_y-5*self.pad/3), 0),
+                                    min((cropped_x+2*self.pad/3), img_cropped.shape[2]),
+                                    min((cropped_y+self.pad/3), img_cropped.shape[1])])
+                
+                classes.append(class_idx.unsqueeze(0))
+                bbx.append(box.unsqueeze(0))
+
+        else:
+            classes.append(torch.tensor(0).to(torch.long).unsqueeze(0))
+            bbx.append(torch.tensor([5,5,img_cropped.shape[2]-5, img_cropped.shape[1]-5]).unsqueeze(0))
         bbx, classes = torch.cat(bbx), torch.cat(classes)
 
         augmented = self.transform(img_cropped.permute(1,2,0).numpy(), bbx.numpy(), classes.numpy(), seg_cropped.numpy())
@@ -131,8 +136,9 @@ class TTDatasetBX(Dataset):
         aug_seg = augmented['mask']
         aug_image = torch.tensor(aug_image).permute(2,0,1)
 
-        indices = nms(aug_coords, 0.5*torch.ones_like(aug_coords[:,0]), iou_threshold=.5) ## iou as args
-        return {"img": aug_image, "labels": classes, "boxes": aug_coords , 'mask':torch.tensor(aug_seg)}
+        # indices = nms(aug_coords, 0.5*torch.ones_like(aug_coords[:,0]), iou_threshold=1.0) ## iou as args
+        return {"img": aug_image, "severity":severity, "labels": classes, 
+                "boxes": aug_coords , 'mask':torch.tensor(aug_seg)}
 
 
     def compute_eye_bbx(self, seg, label=1, pad=0):
@@ -421,7 +427,7 @@ class TTDataModuleSeg(pl.LightningDataModule):
 
 
 class TTDataModuleBX(pl.LightningDataModule):
-    def __init__(self, df_train, df_val, df_test, mount_point="./", batch_size=256, num_workers=4, img_column="img_path", class_column='class', pad=64, balanced=False, train_transform=None, valid_transform=None, test_transform=None, drop_last=False):
+    def __init__(self, df_train, df_val, df_test, mount_point="./", batch_size=256, num_workers=4, img_column="img_path", class_column='class', severity_column='sev', balanced=False, train_transform=None, valid_transform=None, test_transform=None, drop_last=False):
         super().__init__()
 
         self.df_train = df_train
@@ -434,6 +440,7 @@ class TTDataModuleBX(pl.LightningDataModule):
         
         self.img_column = img_column
         self.class_column = class_column   
+        self.severity_column = severity_column   
         
         self.balanced = balanced
         self.train_transform = train_transform
@@ -444,9 +451,9 @@ class TTDataModuleBX(pl.LightningDataModule):
     def setup(self, stage=None):
 
         # Assign train/val datasets for use in dataloaders
-        self.train_ds = monai.data.Dataset(data=TTDatasetBX(self.df_train, mount_point=self.mount_point, img_column=self.img_column, class_column=self.class_column, transform=self.train_transform))
-        self.val_ds = monai.data.Dataset(TTDatasetBX(self.df_val, mount_point=self.mount_point, img_column=self.img_column, class_column=self.class_column, transform=self.valid_transform))
-        self.test_ds = monai.data.Dataset(TTDatasetBX(self.df_test, mount_point=self.mount_point, img_column=self.img_column, class_column=self.class_column, transform=self.test_transform))
+        self.train_ds = monai.data.Dataset(data=TTDatasetBX(self.df_train, mount_point=self.mount_point, img_column=self.img_column, class_column=self.class_column, sev_column=self.severity_column, transform=self.train_transform))
+        self.val_ds = monai.data.Dataset(TTDatasetBX(self.df_val, mount_point=self.mount_point, img_column=self.img_column, class_column=self.class_column, sev_column=self.severity_column, transform=self.valid_transform))
+        self.test_ds = monai.data.Dataset(TTDatasetBX(self.df_test, mount_point=self.mount_point, img_column=self.img_column, class_column=self.class_column, sev_column=self.severity_column, transform=self.test_transform))
 
     def train_dataloader(self):
 
