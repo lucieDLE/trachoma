@@ -128,5 +128,7 @@ def eye_level_outcome(targets_labels):
         return max(max_labels).item()
       else:
         return -1
-  else:
+  elif len(unique_labels) == 1:
       return unique_labels.item()
+  else:
+    return-1
