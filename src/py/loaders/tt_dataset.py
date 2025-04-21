@@ -99,6 +99,9 @@ class TTDatasetBX(Dataset):
         bbx_eye = self.compute_eye_bbx(seg, pad=0.05)
         img_cropped = img[:,bbx_eye[1]:bbx_eye[3],bbx_eye[0]:bbx_eye[2] ]
         seg_cropped = seg[bbx_eye[1]:bbx_eye[3],bbx_eye[0]:bbx_eye[2] ]
+        seg_cropped[ seg_cropped!=3 ] =0
+        h,w = seg_cropped.shape
+        
         self.pad = int(img_cropped.shape[1]/10)
 
 
@@ -114,13 +117,27 @@ class TTDatasetBX(Dataset):
                 x, y = row['x_patch'], row['y_patch']
             
                 cropped_x, cropped_y = x - bbx_eye[0], y -bbx_eye[1]
+                slice = seg_cropped[:,cropped_x]
+                height_box = min(np.nonzero(slice).shape[0], int(seg_cropped.shape[0]/3)) # if box is more than a third of the input
 
                 # ensure coordinates in range
                 box = torch.tensor([max((cropped_x-2*self.pad/3), 0),
-                                    max((cropped_y-5*self.pad/3), 0),
+                                    max((cropped_y-height_box -5), 0),
                                     min((cropped_x+2*self.pad/3), img_cropped.shape[2]),
-                                    min((cropped_y+self.pad/3), img_cropped.shape[1])])
+                                    min((cropped_y+height_box/10 +5), img_cropped.shape[1])])
                 
+                if class_idx == 3: #TT -> TT should be smaller cause lashes 
+                    box = torch.tensor([max((cropped_x -2*self.pad/3), 0),
+                                        max((cropped_y - height_box/2), 0),
+                                        min((cropped_x +2*self.pad/3), img_cropped.shape[2]),
+                                        min((cropped_y ), img_cropped.shape[1])])
+                # old
+                # ensure coordinates in range
+                # box = torch.tensor([max((cropped_x-2*self.pad/3), 0),
+                #                     max((cropped_y-5*self.pad/3), 0),
+                #                     min((cropped_x+2*self.pad/3), img_cropped.shape[2]),
+                #                     min((cropped_y+self.pad/3), img_cropped.shape[1])])
+
                 classes.append(class_idx.unsqueeze(0))
                 bbx.append(box.unsqueeze(0))
 
