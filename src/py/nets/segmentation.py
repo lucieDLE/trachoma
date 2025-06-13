@@ -1,10 +1,11 @@
 import math
 import numpy as np 
+from timm import create_model
 
 import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
-
+import pandas as pd 
 from torchvision import models
 from torchvision import transforms
 import torchmetrics
@@ -14,14 +15,18 @@ from monai.networks.nets import AutoEncoder
 from monai.networks.blocks import Convolution
 from monai.metrics import DiceMetric
 from torchvision.models.detection.rpn import AnchorGenerator
-
+from evaluation import *
+from visualization import select_eyelid_seg, filter_indices_on_segmentation_mask
 from monai.transforms import (
     ToTensord
 )
 from torchvision.models.detection.faster_rcnn import FasterRCNN
 from torchvision.models.detection.roi_heads import RoIHeads, fastrcnn_loss
-
+from torchvision.ops import nms
 import lightning.pytorch as pl
+from sklearn.metrics import f1_score, balanced_accuracy_score
+from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
+from torchvision.models.detection.backbone_utils import BackboneWithFPN
 
 # from pl_bolts.transforms.dataset_normalizations import (
 #     imagenet_normalization
@@ -120,30 +125,29 @@ class TTUNet(pl.LightningModule):
         return  self(images)
 
 class TTRCNN(pl.LightningModule):
-    def __init__(self, num_classes=4, device='cuda', **kwargs):
+    def __init__(self, device='cuda', **kwargs):
         super(TTRCNN, self).__init__()        
         
         self.save_hyperparameters()
         self.model = models.detection.maskrcnn_resnet50_fpn(weights=models.detection.MaskRCNN_ResNet50_FPN_Weights.DEFAULT,
-                                                            min_size=512,
-                                                            max_size=512,
                                                             rpn_fg_iou_thresh=0.5,
-                                                            rpn_nms_thr = 0.8,
+                                                            rpn_nms_thr = 0.6,
+                                                            detections_per_img = 4,
                                                             box_detections_per_img = 4,
                                                             rpn_post_nms_top_n_train=50,
                                                             rpn_post_nms_top_n_test=50,
                                                             )
 
-        self.num_classes = num_classes
+        self.num_classes = self.hparams.out_features
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
-        self.model.roi_heads.box_predictor = models.detection.faster_rcnn.FastRCNNPredictor(in_features, num_classes)
+        self.model.roi_heads.box_predictor = models.detection.faster_rcnn.FastRCNNPredictor(in_features, self.num_classes)
 
         in_features_mask = self.model.roi_heads.mask_predictor.conv5_mask.in_channels
         hidden_layer = 256
-        self.model.roi_heads.mask_predictor = models.detection.mask_rcnn.MaskRCNNPredictor(in_features_mask, hidden_layer, num_classes)
+        self.model.roi_heads.mask_predictor = models.detection.mask_rcnn.MaskRCNNPredictor(in_features_mask, hidden_layer, self.num_classes)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=0.01)
         return optimizer
 
     def compute_bb_mask(self, seg, pad=0.5):
@@ -222,9 +226,12 @@ class TTRCNN(pl.LightningModule):
         y = train_batch["seg"]
         
         loss_dict = self(train_batch)
-        loss = sum([loss for loss in loss_dict.values()])
-        self.log('train_loss', loss)
-                
+        for w, n in zip(self.hparams.loss_weights, loss_dict.keys()):
+            loss = loss_dict[n]
+            total_loss += w*loss
+            self.log(f'train/{n}', loss, sync_dist=True)
+        self.log('train_loss', total_loss,sync_dist=True,batch_size=self.hparams.batch_size)
+
         return loss
 
     def validation_step(self, val_batch, batch_idx):
@@ -233,12 +240,10 @@ class TTRCNN(pl.LightningModule):
         
         loss_dict, preds = self(val_batch, mode='val')
         total_loss = 0
-        for loss_name in loss_dict.keys():
-        # ['loss_classifier', 'loss_box_reg', 'loss_mask', 'loss_objectness', 'loss_rpn_box_reg'])
-            loss = loss_dict[loss_name]
-            total_loss += loss
-            self.log(f'val/{loss_name}', loss, sync_dist=True)
-            # totloss = sum([loss for loss in loss_dict.values()])
+        for w, n in zip(self.hparams.loss_weights, loss_dict.keys()):
+            loss = loss_dict[n]
+            total_loss += w*loss
+            self.log(f'val/{n}', loss, sync_dist=True)
   
         self.log('val_loss', total_loss,sync_dist=True,batch_size=self.hparams.batch_size)
 
@@ -448,9 +453,9 @@ class CustomRoIHeads(RoIHeads):
 
         return result, losses
 
-class FasterRCNN(pl.LightningModule):
+class FasterTTRCNN(pl.LightningModule):
     def __init__(self, device='cuda', **kwargs):
-        super(FasterRCNN, self).__init__()
+        super(FasterTTRCNN, self).__init__()
         
         self.save_hyperparameters()
 
@@ -468,15 +473,16 @@ class FasterRCNN(pl.LightningModule):
 
 
         in_features = self.model.roi_heads.box_predictor.cls_score.in_features
+        self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.hparams.out_features) #conflict
 
         self.model.roi_heads = CustomRoIHeads(self.model.roi_heads.box_roi_pool,
                                               self.model.roi_heads.box_head,
                                               models.detection.faster_rcnn.FastRCNNPredictor(in_features, self.hparams.out_features),
-                                              fg_iou_thresh=0.5,
-                                              bg_iou_thresh=0.5,
+                                              fg_iou_thresh=0.6,
+                                              bg_iou_thresh=0.4,
                                               batch_size_per_image=512,
                                               bbox_reg_weights=None,
-                                              positive_fraction=0.25,
+                                              positive_fraction=0.15,
                                               score_thresh=0.05,
                                               nms_thresh=0.5,
                                               detections_per_img=25,
@@ -532,6 +538,59 @@ class FasterRCNN(pl.LightningModule):
             self.log(f'val/{n}', loss, sync_dist=True)
         self.log('val_loss', total_loss,sync_dist=True,batch_size=self.hparams.batch_size)
 
+        f1_macro, f1_per_class, balanced_acc = self.evaluate_accuracy(val_batch[0], val_batch[1], preds)
+
+        # Log with PyTorch Lightning + Neptune
+        self.log("val_acc/f1_macro", f1_macro)
+        self.log("val_acc/balanced_acc", balanced_acc)
+        
+        for i, score in enumerate(f1_per_class):
+            self.log(f"val_acc/f1_class_{i}", score)
+
     def predict_step(self, images):
 
         return self(images, mode='test')
+
+    def evaluate_accuracy(self, imgs, targets, preds):
+        gt, pred = [], []
+
+        for p, t in zip(preds, targets):
+
+            gt_indices = nms(t['boxes'], torch.ones_like(t['boxes'][:,0]), iou_threshold=1.0) ## iou as args
+            t['boxes'] = t['boxes'][gt_indices].cpu().detach()
+            t['labels'] = t['labels'][gt_indices].cpu().detach()  
+            t['mask'] = t['mask'].cpu().detach()
+
+            gt.append(gt_eye_outcome(t['labels']))
+
+            ### -- preds -- ###
+            eyelid_seg = select_eyelid_seg(t['mask'])
+            p = filter_indices_on_segmentation_mask(eyelid_seg, p, overlap_threshold=0.5)
+
+            preds = {}
+            for k in p.keys():
+                preds[k] = p[k].cpu().detach()
+
+            if len(preds['scores']) >= 1:
+                preds = process_predictions(preds)
+            # thr = p['scores'].mean() - 2*p['scores'].std()
+            # keep = p['scores'] > thr
+            # p = filter_targets_indices(p, keep)
+
+            pred.append(eye_level_outcome(preds, imgs.shape[2:]))
+
+        gt = torch.tensor(gt)
+        pred = torch.tensor(pred)
+
+        df_eval = pd.DataFrame(data={'gt':gt, 'pred':pred})
+        df_sel = df_eval.loc[ df_eval['gt'] != -1]
+        df_sel = df_sel.loc[ df_sel['pred'] != -1]
+
+        df_sel = df_sel[['pred', 'gt']] -1
+
+        # Compute metrics
+        f1_macro = f1_score(df_sel['gt'], df_sel['pred'], average='macro')
+        f1_per_class = f1_score(df_sel['gt'], df_sel['pred'], average=None)
+        balanced_acc = balanced_accuracy_score(df_sel['gt'], df_sel['pred'])
+
+        return f1_macro, f1_per_class, balanced_acc
