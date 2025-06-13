@@ -1,5 +1,5 @@
 import os
-# os.environ['CUDA_VISIBLE_DEVICES']="0"
+# os.environ['CUDA_VISIBLE_DEVICES']="1"
 import argparse
 
 import math
@@ -8,10 +8,10 @@ import numpy as np
 
 import torch
 import pdb
-from nets.segmentation import FasterRCNN,TTRCNN
+from nets.segmentation import FasterTTRCNN,TTRCNN
 from loaders.tt_dataset import TTDataModuleBX, TrainTransformsSeg, EvalTransformsSeg,BBXImageTrainTransform, BBXImageEvalTransform, BBXImageTestTransform
 from callbacks.logger import SegImageLoggerNeptune, MaskRCNNImageLoggerNeptune,FasterRCNNImageLoggerNeptune
-
+from  torchvision import models
 from lightning import Trainer
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -22,20 +22,26 @@ from sklearn.utils import class_weight
 
 def remove_labels(df, args):
 
+    # df = df.drop_duplicates(subset=['x_patch', 'y_patch', 'filename'])
+    df = df.loc[ df['to_drop'] == 0]
+
     if args.drop_labels is not None:
         df = df[ ~ df[args.label_column].isin(args.drop_labels)]
 
     if args.concat_labels is not None:
-        replacement_val = df.loc[ df['label'] == args.concat_labels[0]]['class'].unique()
-        df.loc[ df['label'].isin(args.concat_labels), "class" ] = replacement_val[0]
+        replacement_val = df.loc[ df[args.label_column] == args.concat_labels[0]][args.class_column].unique()
+        df.loc[ df[args.label_column].isin(args.concat_labels), args.class_column ] = replacement_val[0]
 
     unique_classes = sorted(df[args.class_column].unique())
     class_mapping = {value: idx+1 for idx, value in enumerate(unique_classes)}
 
-    df[args.class_column] = df[args.class_column].map(class_mapping)
+    df[args.class_column] = df[args.class_column].map(class_mapping)    
+    # df.loc[ df[args.label_column] == 'Reject', class_column]  = 0
 
-    print(f"{df[[args.label_column, args.class_column]].value_counts()}")
-    return df.reset_index()
+    print(f"Kept Classes : {df[args.label_column].unique()}, {class_mapping}")
+
+    return df
+
 
 def main(args):
 
@@ -52,7 +58,7 @@ def main(args):
     unique_classes = np.sort(np.unique(df_train[args.class_column]))
     args_params['out_features'] = len(unique_classes) + 1
 
-    args_params['class_weights'] = np.ones_like(unique_classes)
+    args_params['class_weights'] = np.ones(args_params['out_features'])
     if args.balanced_weights:
         unique_class_weights = np.array(class_weight.compute_class_weight(class_weight='balanced', classes=unique_classes, y=df_train[args.class_column]))
         args_params['class_weights'] =  np.concatenate((np.array([0]), unique_class_weights))
@@ -74,7 +80,7 @@ def main(args):
 
     print(f"class weights: {args_params['class_weights']}")
 
-    ttdata = TTDataModuleBX(df_train, df_val, df_test, batch_size=args.batch_size, num_workers=args.num_workers, img_column=args.img_column, 
+    ttdata = TTDataModuleBX(df_train, df_val, df_test, batch_size=args.batch_size, num_workers=args.num_workers, img_column=args.img_column, class_column=args.class_column,
                             mount_point=args.mount_point, train_transform=BBXImageTrainTransform(), valid_transform=BBXImageEvalTransform(), test_transform=BBXImageTestTransform())
 
 
@@ -88,30 +94,12 @@ def main(args):
 
     image_logger = FasterRCNNImageLoggerNeptune(log_steps = args.log_every_n_steps)
     if args.model:
-        model = FasterRCNN.load_from_checkpoint(args.model, **vars(args), strict=False)
+        model = FasterTTRCNN.load_from_checkpoint(args.model, **vars(args), strict=False)
     else:
-        model = FasterRCNN(**vars(args))
+        model = FasterTTRCNN(**vars(args))
     
-    # for param in model.model.backbone.parameters():
-    #     param.requires_grad = False
-
-    # Train only the RPN and classification head - 1st stage 
-    for param in model.model.rpn.parameters():
-        param.requires_grad = False
-    for param in model.model.roi_heads.parameters():
-        param.requires_grad = False
-
-    # Freeze backbone (except last two layers)
-    for param in model.model.backbone.body.layer1.parameters():
-        param.requires_grad = False
-    for param in model.model.backbone.body.layer2.parameters():
-        param.requires_grad = False
-    for param in model.model.backbone.body.layer3.parameters():
-        param.requires_grad = True
-    for param in model.model.backbone.body.layer4.parameters():
-        param.requires_grad = True
     
-    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=args.patience, verbose=True, mode="min")
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=args.patience, verbose=True, mode="max")
     logger = None
     if args.tb_dir:
         logger = TensorBoardLogger(save_dir=args.tb_dir, name=args.tb_name)
