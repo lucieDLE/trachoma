@@ -88,7 +88,10 @@ class TTDatasetBX(Dataset):
         self.seg_path = img_path.replace('img', 'seg').replace('.jpg', '.nrrd')
 
         df_patches = self.df.loc[ self.df[self.img_column] == subject]
-        severity = torch.tensor(df_patches.iloc[0][self.severity_column]).to(torch.long)
+        # try:
+        #     severity = torch.tensor(df_patches.iloc[0][self.severity_column]).to(torch.long)
+        # except:
+        #     severity=0 # quick fix for previous files (undervs over) that don't have the severity column
 
         seg = torch.tensor(np.squeeze(sitk.GetArrayFromImage(sitk.ReadImage(self.seg_path)).copy())).to(torch.float32)
         img = torch.tensor(np.squeeze(sitk.GetArrayFromImage(sitk.ReadImage(img_path)).copy())).to(torch.float32)
@@ -104,45 +107,26 @@ class TTDatasetBX(Dataset):
         
         self.pad = int(img_cropped.shape[1]/10)
 
-
         df_filtered = df_patches[(df_patches['x_patch'] >= bbx_eye[0].numpy()) & (df_patches['x_patch'] <= bbx_eye[2].numpy())]
-        df_patches = df_filtered[(df_filtered['y_patch'] >= bbx_eye[1].numpy()) & (df_filtered['y_patch'] <= bbx_eye[3].numpy())]
+        df_filtered = df_filtered[(df_filtered['y_patch'] >= bbx_eye[1].numpy()) & (df_filtered['y_patch'] <= bbx_eye[3].numpy())]
 
-        
         bbx, classes = [], []
-        if not df_patches.empty:
-            for k, row in df_patches.iterrows():
+        if not df_filtered.empty:
+            for k, row in df_filtered.iterrows():
                 class_idx =  torch.tensor(row[self.class_column]).to(torch.long)
-
                 x, y = row['x_patch'], row['y_patch']
-            
-                cropped_x, cropped_y = x - bbx_eye[0], y -bbx_eye[1]
-                slice = seg_cropped[:,cropped_x]
-                height_box = min(np.nonzero(slice).shape[0], int(seg_cropped.shape[0]/3)) # if box is more than a third of the input
 
-                # ensure coordinates in range
+                cropped_x, cropped_y = x - bbx_eye[0], y -bbx_eye[1]
                 box = torch.tensor([max((cropped_x-2*self.pad/3), 0),
-                                    max((cropped_y-height_box -5), 0),
+                                    max((cropped_y-5*self.pad/3), 0),
                                     min((cropped_x+2*self.pad/3), img_cropped.shape[2]),
-                                    min((cropped_y+height_box/10 +5), img_cropped.shape[1])])
-                
-                if class_idx == 3: #TT -> TT should be smaller cause lashes 
-                    box = torch.tensor([max((cropped_x -2*self.pad/3), 0),
-                                        max((cropped_y - height_box/2), 0),
-                                        min((cropped_x +2*self.pad/3), img_cropped.shape[2]),
-                                        min((cropped_y ), img_cropped.shape[1])])
-                # old
-                # ensure coordinates in range
-                # box = torch.tensor([max((cropped_x-2*self.pad/3), 0),
-                #                     max((cropped_y-5*self.pad/3), 0),
-                #                     min((cropped_x+2*self.pad/3), img_cropped.shape[2]),
-                #                     min((cropped_y+self.pad/3), img_cropped.shape[1])])
+                                    min((cropped_y+self.pad/3), img_cropped.shape[1])])
 
                 classes.append(class_idx.unsqueeze(0))
                 bbx.append(box.unsqueeze(0))
 
         else:
-            classes.append(torch.tensor(0).to(torch.long).unsqueeze(0))
+            classes.append(torch.tensor(1).to(torch.long).unsqueeze(0))
             bbx.append(torch.tensor([5,5,img_cropped.shape[2]-5, img_cropped.shape[1]-5]).unsqueeze(0))
         bbx, classes = torch.cat(bbx), torch.cat(classes)
 
@@ -153,9 +137,12 @@ class TTDatasetBX(Dataset):
         aug_seg = augmented['mask']
         aug_image = torch.tensor(aug_image).permute(2,0,1)
 
-        # indices = nms(aug_coords, 0.5*torch.ones_like(aug_coords[:,0]), iou_threshold=1.0) ## iou as args
-        return {"img": aug_image, "severity":severity, "labels": classes, 
-                "boxes": aug_coords , 'mask':torch.tensor(aug_seg)}
+        indices = nms(aug_coords, 0.5*torch.ones_like(aug_coords[:,0]), iou_threshold=.5) ## iou as args
+        return {"img": aug_image, 
+                "labels": classes[indices], 
+                "boxes": aug_coords[indices] ,
+                'mask':torch.tensor(aug_seg), 
+                }
 
 
     def compute_eye_bbx(self, seg, label=1, pad=0):
@@ -474,19 +461,19 @@ class TTDataModuleBX(pl.LightningDataModule):
 
     def train_dataloader(self):
 
-        if self.balanced: 
-            g = self.df_train.groupby(self.class_column)
-            df_train = g.apply(lambda x: x.sample(g.size().min())).reset_index(drop=True).sample(frac=1).reset_index(drop=True)
-            self.train_ds = monai.data.Dataset(data=TTDatasetBX(df_train, mount_point=self.mount_point, img_column=self.img_column, class_column=self.class_column, transform=self.train_transform))
+        # if self.balanced: 
+        #     g = self.df_train.groupby(self.class_column)
+        #     df_train = g.apply(lambda x: x.sample(g.size().min())).reset_index(drop=True).sample(frac=1).reset_index(drop=True)
+        #     self.train_ds = monai.data.Dataset(data=TTDatasetBX(df_train, mount_point=self.mount_point, img_column=self.img_column, class_column=self.class_column, transform=self.train_transform))
 
-        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=self.drop_last, collate_fn=self.custom_collate_fn, shuffle=False, prefetch_factor=None)
+        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=self.drop_last, collate_fn=self.balance_batch_collate_fn, shuffle=False, prefetch_factor=None)
 
     def val_dataloader(self):
+        # remove balancing for evaluation step for acc or p,r,f metrics
         return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=self.drop_last, collate_fn=self.custom_collate_fn)
 
     def test_dataloader(self):
         return DataLoader(self.test_ds, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=self.drop_last)
-
 
     def custom_collate_fn(self,batch):
         targets = []
@@ -496,6 +483,69 @@ class TTDataModuleBX(pl.LightningDataModule):
             imgs.append(img.unsqueeze(0))
             targets.append(targets_dic)
         return torch.cat(imgs), targets
+    
+    def balance_batch_collate_fn(self, batch):
+        """Custom collate function that balances classes in a batch"""
+        images = torch.stack([item['img'] for item in batch])
+       
+        masks = torch.stack([item['mask'] for item in batch])
+
+        original_boxes = [item['boxes'] for item in batch]
+        original_labels = [item['labels'] for item in batch]
+        
+        # Count boxes per class across the entire batch
+        all_labels = []
+        for item in batch:
+            all_labels.append(item['labels'])
+        
+        # Find minimum count across classes
+        all_labels = torch.cat(all_labels)
+        classes, counts = torch.unique(all_labels, return_counts=True)
+        min_count = counts.min().item()
+        
+        targets = []
+        for i, (boxes, labels, mask) in enumerate(zip(original_boxes, original_labels, masks)):
+            
+            img_classes = torch.unique(labels)
+            img_balanced_boxes, img_balanced_labels = [], []
+
+            for cls in img_classes:
+                m_label = (labels == cls)
+                cls_boxes = boxes[m_label]
+                cls_labels = labels[m_label]
+                
+                # Calculate how many to keep of this class
+                proportion = len(cls_boxes) / counts[classes == cls].item()
+                keep_count = max(1, int(min_count * proportion))
+                keep_count = min(keep_count, len(cls_boxes))
+                
+                # Randomly sample
+                if len(cls_boxes) > keep_count:
+                    indices = torch.randperm(len(cls_boxes))[:keep_count]
+                    cls_boxes = cls_boxes[indices]
+                    cls_labels = cls_labels[indices]
+                
+                img_balanced_boxes.append(cls_boxes)
+                img_balanced_labels.append(cls_labels)
+            
+            if img_balanced_boxes:
+                img_boxes = torch.cat(img_balanced_boxes)
+                img_labels = torch.cat(img_balanced_labels)
+            else:
+                img_boxes = boxes
+                img_labels = labels
+            
+            dic_i = {'labels': img_labels, 
+                     'boxes': img_boxes,
+                     'mask': mask}
+            targets.append(dic_i)
+
+        labels = [t['labels'] for t in targets]
+        classes, counts = torch.unique(torch.cat(labels), return_counts=True)
+        # print(counts)
+
+        return images, targets
+    
 
 class TTDataModulePatch(pl.LightningDataModule):
     def __init__(self, df_train, df_val, df_test, mount_point="./", batch_size=256, num_workers=4, img_column="img_path", class_column='class', patch_size=448, num_patches_height=2, balanced=False, train_transform=None, valid_transform=None, test_transform=None, drop_last=False):
@@ -882,11 +932,14 @@ class OutTransformsSeg:
 
 class BBXImageTrainTransform():
     def __init__(self):
+        self.h = 768
+        self.w = 1536
 
         self.transform = A.Compose(
             [
-                A.LongestMaxSize(max_size_hw=(768, None)),
-                A.CenterCrop(height=768, width=1536, pad_if_needed=True),
+                A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                A.LongestMaxSize(max_size_hw=(self.h, None)),
+                A.CenterCrop(height=self.h, width=self.w, pad_if_needed=True),
                 A.HorizontalFlip(),
                 A.GaussNoise(),
                 A.OneOf(
@@ -894,19 +947,19 @@ class BBXImageTrainTransform():
                         A.MotionBlur(p=.2),
                         A.MedianBlur(blur_limit=3, p=0.1),
                         A.Blur(blur_limit=3, p=0.1),
-                    ], p=0.2),
+                    ], p=0.1),
                 A.OneOf(
                     [
                         A.OpticalDistortion(p=0.3),
                         A.GridDistortion(p=.1),
-                        ], p=0.2),
+                        ], p=0.1),
                 A.OneOf(
                     [
                         A.CLAHE(clip_limit=2),
                         A.RandomBrightnessContrast(),
-                    ], p=0.3),
-                A.HueSaturationValue(p=0.3),
-                A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=1.0),
+                    ], p=0.1),
+                A.HueSaturationValue(p=0.1),
+                A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=.1),
             ], 
             bbox_params=A.BboxParams(format='pascal_voc', min_area=32, min_visibility=0.1, label_fields=['category_ids']),
             additional_targets={'mask': 'mask'},
@@ -917,11 +970,14 @@ class BBXImageTrainTransform():
 
 class BBXImageEvalTransform():
     def __init__(self):
+        self.h = 768
+        self.w = 1536
 
         self.transform = A.Compose(
             [
-                A.LongestMaxSize(max_size_hw=(768, None)),
-                A.CenterCrop(height=768, width=1536, pad_if_needed=True),
+                A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                A.LongestMaxSize(max_size_hw=(self.h, None)),
+                A.CenterCrop(height=self.h, width=self.w, pad_if_needed=True),
             ], 
             bbox_params=A.BboxParams(format='pascal_voc', min_area=32, min_visibility=0.1, label_fields=['category_ids']),
             additional_targets={'mask': 'mask'},
@@ -933,11 +989,14 @@ class BBXImageEvalTransform():
 
 class BBXImageTestTransform():
     def __init__(self):
+        self.h = 768
+        self.w = 1536
 
         self.transform = A.Compose(
             [
-                A.LongestMaxSize(max_size_hw=(768, None)),
-                A.CenterCrop(height=768, width=1536, pad_if_needed=True),
+                A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                A.LongestMaxSize(max_size_hw=(self.h, None)),
+                A.CenterCrop(height=self.h, width=self.w, pad_if_needed=True),
             ], 
             bbox_params=A.BboxParams(format='pascal_voc', min_area=32, min_visibility=0.1, label_fields=['category_ids']),
             additional_targets={'mask': 'mask'},
