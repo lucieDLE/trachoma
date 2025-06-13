@@ -14,7 +14,33 @@ colormap = {
   'Overlapping_area':(128,128, 128),
 }
 
+# colormap = {
+#   'Reject':(0,0,0),
+#   'Healthy':(0, 104, 0),
+#   'ECA':(0, 0, 153),
+#   'TT':(0, 150, 150),
+#   'Overlapping_area':(128,128, 128),
+# }
+
 legend_dict = colormap
+
+def plot_boxes(img, targets):
+  ax = plt.gca()
+  ax.imshow(img)
+
+  boxes = targets['boxes']
+  labels = targets['labels']
+
+  for j in range(labels.shape[0]):
+    box = boxes[j]
+    label = labels[j]
+
+    x1, y1, x2, y2 = box
+    width, height = x2 - x1, y2 - y1
+
+    rect = Rectangle((x1, y1), width, height, fill=False, color='b', linewidth=1.5)
+    ax.add_patch(rect)
+
 
 def plot_patches(img, targets, map, title='ground truth' ):
   ax = plt.gca()
@@ -28,7 +54,7 @@ def plot_patches(img, targets, map, title='ground truth' ):
     box = boxes[j]
     label = labels[j]
 
-    x1, y1, x2, y2 = box.cpu().detach().numpy()
+    x1, y1, x2, y2 = box
     width, height = x2 - x1, y2 - y1
 
     color = np.array(colormap[map[label.item()]])/255
@@ -69,18 +95,18 @@ def create_mask(eyelid_seg, targets):
 
   # Areas with only label 1 (no overlap with 2 or 3)
   only_label1 = mask_label1 & ~mask_label2 & ~mask_label3
-  label_mask[only_label1 > 0] = colormap['Healthy']
+  label_mask[only_label1 > 0] = colormap[list(colormap.keys())[1]]# colormap['Healthy']
 
   # Areas with only label 2 (no overlap with 1 or 3)
   only_label2 = mask_label2 & ~mask_label1 & ~mask_label3
-  label_mask[only_label2 > 0] = colormap['Entropion']
+  label_mask[only_label2 > 0] = colormap[list(colormap.keys())[2]]# colormap['Entropion']
 
   # Areas with only label 3 (no overlap with 1 or 2)
   only_label3 = mask_label3 & ~mask_label1 & ~mask_label2
-  label_mask[only_label3 > 0] = colormap['Overcorrection']
+  label_mask[only_label3 > 0] = colormap[list(colormap.keys())[3]]# colormap['Overcorrection']
 
   overlap_mask = (mask_label1.astype(int) + mask_label2.astype(int) + mask_label3.astype(int)) > 1
-  label_mask[overlap_mask] = colormap['Overlapping_area']
+  label_mask[overlap_mask] = colormap[list(colormap.keys())[4]]# colormap['Overlapping_area']
 
   mask_eyelid = cv2.bitwise_and(label_mask, label_mask, mask=eyelid_seg)
 
@@ -113,7 +139,7 @@ def create_legend():
     y_pos += 40
   return legend
 
-def fill_patches(targets):
+def fill_empty_patches(targets):
 
   targets = sort_values(targets)
   boxes = targets['boxes']
@@ -156,17 +182,37 @@ def fill_patches(targets):
 
 def replace_sandwiched_labels(targets, context_width=2):    
   targets = sort_values(targets)
-  boxes = targets['boxes'].numpy()
-  labels = targets['labels'].numpy()
+  for k in targets.keys():
+    targets[k] = targets[k].numpy()
+  boxes = targets['boxes']
+  labels = targets['labels']
 
   updated_labels = labels.copy()
   updated_boxes = boxes.copy()
 
   delta_idx = 0
-  for i in range(1, len(labels) - 1):
-    left_context = labels[i-context_width:i]
-    right_context = labels[i+1:i+context_width+1]
+  for i in range(len(labels)):
+    left_context = labels[max(0, i-context_width):i]
+    right_context = labels[i+1:min(len(labels), i+context_width+1)]
     current_label = labels[i]
+
+    # Skip if either context is empty (One box: can't make a decision)
+    # or handling for first box and last box of eyelid -> look at following/previous ones
+    if len(left_context) == 0 or len(right_context) == 0:
+      larger_context = context_width+1
+      left_context = labels[max(0, i-larger_context):i]
+      right_context = labels[i+1:min(len(labels), i+larger_context+1)]
+
+      if len(left_context) == 0 and len(right_context) >= (larger_context): # 3 boxes needeed
+          # First box
+          if len(set(right_context)) == 1 and current_label != right_context[0]:
+              updated_labels[i+delta_idx] = right_context[0]
+      elif len(right_context) == 0 and len(left_context) >= (larger_context):# 3 boxes needeed
+          # Last box
+          if len(set(left_context)) == 1 and current_label != left_context[0]:
+              updated_labels[i+delta_idx] = left_context[0]
+      continue
+
     
     if (current_label not in left_context and current_label not in right_context):
       if (len(set(left_context)) == 1 and  len(set(right_context)) == 1): #only one label
@@ -192,7 +238,7 @@ def replace_sandwiched_labels(targets, context_width=2):
           updated_labels = np.insert(updated_labels, i+delta_idx, left_context[0], axis=0)
           
           if 'scores' in targets:
-            scores = targets['scores'].numpy()
+            scores = targets['scores']
             targets['scores'] = np.insert(scores, i+delta_idx, scores[i+delta_idx], axis=0)
 
           delta_idx +=1
@@ -222,5 +268,4 @@ def filter_indices_on_segmentation_mask(eyelid_seg, targets, overlap_threshold=0
     if len(filtered_idx) > 8:
       return filter_targets_indices(out_targets, filtered_idx)
     else:
-       print('the segmentation is probably off')
-       return out_targets
+      return out_targets

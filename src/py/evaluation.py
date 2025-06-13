@@ -2,15 +2,19 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 import matplotlib.pyplot as plt
 import itertools
+from utils import filter_targets_indices
+import torch
+from visualization import replace_sandwiched_labels, fill_empty_patches
 
 def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix', cmap=plt.cm.Blues):
     if normalize:
       cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
       print("Normalized confusion matrix, avg:", np.trace(cm)/len(classes))
+      plt.imshow(cm, interpolation='nearest', cmap=cmap, aspect='auto',vmin=0, vmax=1)
     else:
       print('Confusion matrix, without normalization')
+      plt.imshow(cm, interpolation='nearest', cmap=cmap, aspect='auto')
 
-    plt.imshow(cm, interpolation='nearest', cmap=cmap, aspect='auto')
     plt.title(title)
     plt.colorbar()
     tick_marks = np.arange(len(classes))
@@ -105,30 +109,82 @@ def gt_eye_outcome(targets_labels):
   
   return outcome
 
+def x_iou(boxA, boxB):
+    """Compute IoU only along the x-axis."""
+    x1_A, y1_A, x2_A, y2_A = boxA
+    x1_B, y1_B, x2_B, y2_B = boxB
+    
+    if (y2_A >= y1_B or y2_B >= y1_A):
+        
+        inter = max(0, min(x2_A, x2_B) - max(x1_A, x1_B))
+        union = (x2_A - x1_A) + (x2_B - x1_B) - inter
+        return inter / union if union > 0 else 0
+    return 0
   
-def eye_level_outcome(targets_labels):
-  unique_labels, counts = np.unique(targets_labels, return_counts=True)
-  unique_labels = unique_labels[counts >3]
-  counts = counts[counts >3]
+def eye_level_outcome(preds,img_shape):
+  unique_labels, counts = np.unique(preds['labels'], return_counts=True)
+  unique_labels = unique_labels[counts >=3]
+  counts = counts[counts>=3]
+
+  outcome = -1 
 
   if len(unique_labels) == 3:
     labels, ct = unique_labels[1:], counts[1:]
     max_labels = labels[ np.argwhere(ct == np.amax(ct))][:,0]
     if np.std(ct) >1:
-      return max_labels.item()
+      outcome = max_labels.item()
     else:
-      return -1
+      outcome = -1
 
   elif len(unique_labels) == 2:
     if 1 in unique_labels:
-      return max(unique_labels)
+      outcome = max(unique_labels)
     else: 
       if np.std(counts) >1:
         max_labels = unique_labels[ np.argwhere(counts == np.amax(counts))][:,0]
-        return max(max_labels).item()
+        outcome = max(max_labels).item()
       else:
-        return -1
+        outcome = -1
   elif len(unique_labels) == 1:
-      return unique_labels.item()
+      outcome = unique_labels.item()
   else:
-    return-1
+    outcome =-1
+  
+  return outcome 
+
+def y_overlap(boxA, boxB):
+    """Check if boxes overlap in the y-axis."""
+    return not (boxA[3] <= boxB[1] or boxB[3] <= boxA[1])
+    
+def custom_x_nms(preds, iou_thresh=0.8):
+    """ Apply NMS based only on x-axis IoU. """
+    boxes = preds['boxes']
+    if 'scores' in preds.keys():
+        scores = preds['scores']
+    else:
+        scores = torch.ones_like(preds['labels'])
+
+    idxs = np.argsort(-scores)  # sort descending by score
+    keep = []
+
+    while len(idxs) > 0:
+        current = idxs[0]
+        keep.append(current)
+        rest = idxs[1:]
+        
+        ious = np.array([x_iou(boxes[current], boxes[i]) for i in rest])
+        idxs = rest[ious <= iou_thresh]
+
+    return torch.stack(keep)
+
+def process_predictions(preds):
+  keep = preds['scores'] > 0.1
+  preds = filter_targets_indices(preds, keep, detach=False)
+  if len(preds['scores']) >= 1:
+    pred_indices = custom_x_nms(preds, iou_thresh=0.4)
+    preds = filter_targets_indices(preds, pred_indices, detach=False)
+  if len(preds['scores']) >= 1:
+    preds = fill_empty_patches(preds)
+  if len(preds['scores']) >= 1:
+    preds = replace_sandwiched_labels(preds)
+  return preds
