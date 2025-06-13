@@ -937,7 +937,7 @@ class BBXImageTrainTransform():
 
         self.transform = A.Compose(
             [
-                A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                # A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                 A.LongestMaxSize(max_size_hw=(self.h, None)),
                 A.CenterCrop(height=self.h, width=self.w, pad_if_needed=True),
                 A.HorizontalFlip(),
@@ -975,7 +975,7 @@ class BBXImageEvalTransform():
 
         self.transform = A.Compose(
             [
-                A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                # A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                 A.LongestMaxSize(max_size_hw=(self.h, None)),
                 A.CenterCrop(height=self.h, width=self.w, pad_if_needed=True),
             ], 
@@ -994,7 +994,7 @@ class BBXImageTestTransform():
 
         self.transform = A.Compose(
             [
-                A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                # A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                 A.LongestMaxSize(max_size_hw=(self.h, None)),
                 A.CenterCrop(height=self.h, width=self.w, pad_if_needed=True),
             ], 
