@@ -914,10 +914,11 @@ class OutTransformsSeg:
     def __call__(self, inp):
         return self.transforms_out(inp)
 
+
 class BBXImageTrainTransform():
-    def __init__(self):
-        self.h = 768
-        self.w = 1536
+    def __init__(self, height=384, width=768):
+        self.h = height
+        self.w = width
 
         self.transform = A.Compose(
             [
@@ -953,9 +954,9 @@ class BBXImageTrainTransform():
         return self.transform(image=image, bboxes=bboxes, category_ids=category_ids, mask=mask)
 
 class BBXImageEvalTransform():
-    def __init__(self):
-        self.h = 768
-        self.w = 1536
+    def __init__(self, height=384, width=768):
+        self.h = height
+        self.w = width
 
         self.transform = A.Compose(
             [
@@ -967,14 +968,14 @@ class BBXImageEvalTransform():
             additional_targets={'mask': 'mask'},
         )
 
-    def __call__(self, image, bboxes, category_ids, mask):
+    def __call__(self, image, bboxes, category_ids, mask=None):
         return self.transform(image=image, bboxes=bboxes, category_ids=category_ids, mask=mask)
     
 
 class BBXImageTestTransform():
-    def __init__(self):
-        self.h = 768
-        self.w = 1536
+    def __init__(self, height=384, width=768):
+        self.h = height
+        self.w = width
 
         self.transform = A.Compose(
             [
@@ -986,6 +987,6 @@ class BBXImageTestTransform():
             additional_targets={'mask': 'mask'},
         )
 
-    def __call__(self, image, bboxes, category_ids, mask):
+    def __call__(self, image, bboxes, category_ids, mask=None):
         return self.transform(image=image, bboxes=bboxes, category_ids=category_ids, mask=mask)
     
