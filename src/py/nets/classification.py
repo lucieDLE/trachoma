@@ -2208,6 +2208,22 @@ class EfficientNetV2SYOLTv2(pl.LightningModule):
 
         return self.resize_img(img_padded[0])
 
+class AttentionReduce(nn.Module):
+    def __init__(self, input_dim, seq_len):
+        super().__init__()
+        # Trainable attention over sequence positions
+        self.attn_layer = nn.Linear(input_dim, 1)  # [*, 3] -> [*, 1]
+
+    def forward(self, x):
+        """
+        x: [B, 18, 3]
+        """
+        attn_logits = self.attn_layer(x)
+        attn_weights = F.softmax(attn_logits, dim=1)  # [B, 18, 1]
+        weighted_sum = torch.sum(attn_weights * x, dim=1)  # [B, 3]
+
+        return weighted_sum
+
 class EfficientNetV2SYOLTPatchv2(pl.LightningModule):
     def __init__(self,**kwargs):
         super(EfficientNetV2SYOLTPatchv2, self).__init__()        
@@ -2218,7 +2234,7 @@ class EfficientNetV2SYOLTPatchv2(pl.LightningModule):
         if hasattr(self.hparams, "class_weights"):
             class_weights = torch.tensor(self.hparams.class_weights).to(torch.float32)
             
-        self.loss = nn.CrossEntropyLoss(weight=class_weights)
+        self.loss = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
         self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=self.hparams.out_features)
         self.num_classes = self.hparams.out_features
 
@@ -2236,21 +2252,16 @@ class EfficientNetV2SYOLTPatchv2(pl.LightningModule):
         #####  multihead attention ####
         self.A = nn.MultiheadAttention(embed_dim=1024, num_heads=4, batch_first=True)
         self.V2A = nn.Linear(64, 1024)
+        self.Ad = AttentionReduce(input_dim=self.hparams.out_features, seq_len=18)
+
         
         self.P = nn.Linear(in_features=1024, out_features=self.hparams.out_features)        
 
 
-        # self.train_transform = transforms.Compose(
-        #     [
-        #         RandomRotate(degrees=90, keys=["img", "seg"], interpolation=[transforms.functional.InterpolationMode.NEAREST, transforms.functional.InterpolationMode.NEAREST], prob=0.5), 
-        #         RandomFlip(keys=["img", "seg"], prob=0.5)
-        #     ]
-        # )
-
     def set_feat_model(self, model_feat):
         self.F.module = model_feat
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=1e-3)
         return optimizer
     
     def forward(self, X_patches):
@@ -2262,30 +2273,19 @@ class EfficientNetV2SYOLTPatchv2(pl.LightningModule):
         x_v2a = self.V2A(x_v)
         x_a, x_a_weights = self.A(x_v2a, x_v2a, x_v2a)  # Shape [BS, n_patches^2, 1024],[BS, n_patches^2, n_patches^2]
 
-        # use the weights to update x_a
-        sum_weights = torch.sum(x_a_weights, 1, keepdim=True)
-        attention_weights = x_a_weights / sum_weights   # Shape: [BS, n_patches^2, n_patches^2]
-
-        ##  mat1 (b×n×m), mat2 (b×m×p), out is (b×n×p)
-        x_a = x_a.transpose(1, 2)  # Shape: [BS, 1024, n_patches^2]
-        x_a = torch.bmm(x_a, attention_weights)  # Shape: [BS, 1024, n_patches^2]
-        x_a = x_a.transpose(1, 2)
 
         x = self.P(x_a)
+        x = self.Ad(x)
         return x, X_patches, x_a, x_v,
 
     def training_step(self, train_batch, batch_idx):
 
         imgs, labels = train_batch['patches'], train_batch['labels']
-        # batch = self.train_transform(imgs)
-
         x, X_patches, x_a, x_v, = self(imgs)
-        x = x.reshape(-1,self.hparams.out_features)
-
-        loss = self.loss(x, labels.reshape(-1))
+        loss = self.loss(x, labels)
         self.log('train_loss', loss, sync_dist=True)
 
-        self.accuracy(torch.argmax(x, dim=1), labels.reshape(-1))
+        self.accuracy(torch.argmax(x, dim=1), labels)
         self.log("train_acc", self.accuracy, sync_dist=True)
         return loss
 
@@ -2293,22 +2293,32 @@ class EfficientNetV2SYOLTPatchv2(pl.LightningModule):
 
         imgs, labels = val_batch['patches'], val_batch['labels']
         # batch = self.train_transform(imgs)
-
         x, X_patches, x_a, x_v, = self(imgs)
-        x = x.reshape(-1,self.hparams.out_features)
-
-        loss = self.loss(x, labels.reshape(-1))
+        loss = self.loss(x, labels)
         self.log('val_loss', loss, sync_dist=True)
 
-        self.accuracy(torch.argmax(x, dim=1), labels.reshape(-1))
+        self.accuracy(torch.argmax(x, dim=1), labels)
         self.log("val_acc", self.accuracy, sync_dist=True)
 
     def test_step(self, test_batch, batch_idx):
         imgs, labels = test_batch['patches'], test_batch['labels']
         # batch = self.train_transform(imgs)
 
-        x, X_patches, x_a, x_v, = self(imgs)
-        x = x.reshape(-1,self.hparams.out_features)
+        x, X_patches, x_a, x_v, = self(imgs.cuda())
+        x = x.reshape(-1,self.hparams.out_features).cpu().detach()
+        
 
-        out = [ torch.argmax(x, dim=1), labels.reshape(-1) ]
-        return out
+        labels_with_undefined_masked = labels * (labels != -1)
+        y_onehot = torch.nn.functional.one_hot(labels_with_undefined_masked,
+                                                num_classes=self.num_classes, 
+                                                ).float().cpu().detach()
+        
+        # If undefined patch, each class gets equal weight
+        logits_for_undefined_class = torch.ones(self.num_classes).float() / self.num_classes
+        y_onehot[labels == -1] = logits_for_undefined_class.cpu().detach()
+        y_onehot = y_onehot.reshape(-1, self.num_classes)
+
+        labels = labels.reshape(-1).cpu().detach()
+        pred_defined_patches = torch.argmax(x[labels != -1], dim=1)
+        gt_defined_patches = labels[labels != -1]
+        return gt_defined_patches, pred_defined_patches
