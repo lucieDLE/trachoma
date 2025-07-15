@@ -173,9 +173,9 @@ def fill_empty_patches(targets):
             targets['scores'] = targets['scores']
             new_scores = targets['scores'][i:i+2].mean()
             targets['scores'] = torch.cat([targets['scores'][:i+1+j], new_scores.unsqueeze(0), targets['scores'][i+1+j:]])
-      else:
+      # else:
         # idk 
-        print('conflict to raise')
+        # print('conflict to raise')
 
   
   return sort_values(targets)
