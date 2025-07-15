@@ -1,7 +1,6 @@
 import math
 import numpy as np 
-from timm import create_model
-
+from torchvision.ops import boxes as box_ops
 import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
@@ -11,27 +10,15 @@ from torchvision import transforms
 import torchmetrics
 from utils import FocalLoss
 import monai
-from monai.networks.nets import AutoEncoder
-from monai.networks.blocks import Convolution
-from monai.metrics import DiceMetric
-from torchvision.models.detection.rpn import AnchorGenerator
 from evaluation import *
 from visualization import select_eyelid_seg, filter_indices_on_segmentation_mask
 from monai.transforms import (
     ToTensord
 )
-from torchvision.models.detection.faster_rcnn import FasterRCNN
 from torchvision.models.detection.roi_heads import RoIHeads, fastrcnn_loss
 from torchvision.ops import nms
 import lightning.pytorch as pl
 from sklearn.metrics import f1_score, balanced_accuracy_score
-from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
-from torchvision.models.detection.backbone_utils import BackboneWithFPN
-
-# from pl_bolts.transforms.dataset_normalizations import (
-#     imagenet_normalization
-# )
-
 class TTUSeg(nn.Module):
     def __init__(self, unet):
         super(TTUSeg, self).__init__()
@@ -461,7 +448,7 @@ class FasterTTRCNN(pl.LightningModule):
 
 
         self.model = models.detection.fasterrcnn_resnet50_fpn_v2(weights=models.detection.FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT,
-                                                             min_size=128,
+                                                             min_size=512,
                                                              max_size=1024,
                                                              rpn_fg_iou_thresh=0.4,
                                                              rpn_bg_iou_thresh = 0.1,
@@ -493,14 +480,14 @@ class FasterTTRCNN(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.wd)
         return optimizer
 
-    def forward(self, images, targets=None, mode='train'):
+    def forward(self, images, targets=None, mode='test'):
         images = images.to(self.device)
         if mode == 'train':
             self.model.train()
             losses = self.model(images, targets)
             return losses
 
-        if mode == 'val': # get the boxes and losses
+        elif mode == 'val': # get the boxes and losses
             with torch.no_grad():
                 self.model.train()
                 losses = self.model(images, targets)
@@ -509,8 +496,7 @@ class FasterTTRCNN(pl.LightningModule):
                 preds = self.model(images)
                 self.model.train()
                 return [losses, preds]
-
-        elif mode == 'test': # prediction
+        else:
             self.model.eval()
             output = self.model(images)
 
@@ -518,7 +504,7 @@ class FasterTTRCNN(pl.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         
-        loss_dict = self(train_batch[0], train_batch[1])
+        loss_dict = self(train_batch[0], train_batch[1], mode='train')
         total_loss = 0
         for w, n in zip(self.hparams.loss_weights, loss_dict.keys()):
             loss = loss_dict[n]
@@ -594,3 +580,177 @@ class FasterTTRCNN(pl.LightningModule):
         balanced_acc = balanced_accuracy_score(df_sel['gt'], df_sel['pred'])
 
         return f1_macro, f1_per_class, balanced_acc
+
+class TTRPN(nn.Module):
+    def __init__(self, faster):
+        super(TTRPN, self).__init__()
+        self.faster = faster
+
+    def forward(self, images, targets=None):
+
+        original_image_sizes: list[tuple[int, int]] = []
+        for img in images:
+            val = img.shape[-2:]
+            torch._assert(
+                len(val) == 2,
+                f"expecting the last two dimensions of the Tensor to be H and W instead got {img.shape[-2:]}",
+            )
+            original_image_sizes.append((val[0], val[1]))
+
+        images, targets = self.faster.transform(images, targets)
+
+        features = self.faster.backbone(images.tensors)
+        proposals, proposal_loss = self.faster.rpn(images, features, targets)
+        return proposals
+
+class TTRoidHead(nn.Module):
+    def __init__(self, faster):
+        super(TTRoidHead, self).__init__()
+        self.faster = faster
+        self.images_shapes = None
+        self.og_sizes = None
+
+    def forward(self, images, proposals, targets=None):
+
+        original_image_sizes: list[tuple[int, int]] = []
+        for img in images:
+            val = img.shape[-2:]
+            torch._assert(
+                len(val) == 2,
+                f"expecting the last two dimensions of the Tensor to be H and W instead got {img.shape[-2:]}",
+            )
+            original_image_sizes.append((val[0], val[1]))
+
+        images, targets = self.faster.transform(images, targets)
+        self.images_shapes = images.image_sizes
+        self.og_sizes = original_image_sizes
+
+        features = self.faster.backbone(images.tensors)
+        if isinstance(features, torch.Tensor):
+            features = OrderedDict([("0", features)])
+
+        roi_out = self.faster.roi_heads.box_roi_pool(features, proposals, images.image_sizes)
+        box_features = self.faster.roi_heads.box_head(roi_out)
+        class_logits, box_regression = self.faster.roi_heads.box_predictor(box_features)
+        # boxes, scores, labels = self.faster.roi_heads.postprocess_detections(class_logits, box_regression, proposals, images.image_sizes)
+
+        device = class_logits.device
+        num_classes = class_logits.shape[-1]
+
+        boxes_per_image = [boxes_in_image.shape[0] for boxes_in_image in proposals]
+        pred_boxes = self.faster.roi_heads.box_coder.decode(box_regression, proposals)
+
+        pred_scores = F.softmax(class_logits, -1)
+
+        pred_boxes_list = pred_boxes.split(boxes_per_image, 0)
+        pred_scores_list = pred_scores.split(boxes_per_image, 0)
+
+        all_boxes = []
+        all_scores = []
+        all_labels = []
+        for boxes, scores, image_shape in zip(pred_boxes_list, pred_scores_list, images.image_sizes):
+            boxes = box_ops.clip_boxes_to_image(boxes, image_shape)
+
+            # create labels for each prediction
+            labels = torch.arange(num_classes, device=device)
+            labels = labels.view(1, -1).expand_as(scores)
+
+            scores, labels = torch.max(scores, dim=1)
+            batch_indices = torch.arange(boxes.size(0), device=boxes.device)
+            
+            boxes = boxes[batch_indices, labels]
+            
+            all_boxes.append(boxes)
+            all_scores.append(scores)
+            all_labels.append(labels)
+
+
+        detections = []
+        num_images = len(all_labels)
+        for i in range(num_images):
+            detections.append(
+                {
+                    "boxes": all_boxes[i],
+                    "labels": all_labels[i],
+                    "scores": all_scores[i],
+                }
+            )
+        
+        return detections[0]['boxes'], detections[0]['labels'], detections[0]['scores']
+    
+# errors when exporting from onnx to tflite at inference
+class TTFullModel(nn.Module):
+    def __init__(self, faster):
+        super(TTFullModel, self).__init__()
+        self.faster = faster
+        self.images_shapes = None
+        self.og_sizes = None
+
+    def forward(self, images, targets=None):
+
+        original_image_sizes: list[tuple[int, int]] = []
+        for img in images:
+            val = img.shape[-2:]
+            torch._assert(
+                len(val) == 2,
+                f"expecting the last two dimensions of the Tensor to be H and W instead got {img.shape[-2:]}",
+            )
+            original_image_sizes.append((val[0], val[1]))
+
+        images, targets = self.faster.transform(images, targets)
+        self.images_shapes = images.image_sizes
+        self.og_sizes = original_image_sizes
+
+        features = self.faster.backbone(images.tensors)
+        proposals, proposal_loss = self.faster.rpn(images, features, targets)
+
+        if isinstance(features, torch.Tensor):
+            features = OrderedDict([("0", features)])
+
+        roi_out = self.faster.roi_heads.box_roi_pool(features, proposals, images.image_sizes)
+        box_features = self.faster.roi_heads.box_head(roi_out)
+        class_logits, box_regression = self.faster.roi_heads.box_predictor(box_features)
+
+        device = class_logits.device
+        num_classes = class_logits.shape[-1]
+
+        boxes_per_image = [boxes_in_image.shape[0] for boxes_in_image in proposals]
+        pred_boxes = self.faster.roi_heads.box_coder.decode(box_regression, proposals)
+
+        pred_scores = F.softmax(class_logits, -1)
+
+        pred_boxes_list = pred_boxes.split(boxes_per_image, 0)
+        pred_scores_list = pred_scores.split(boxes_per_image, 0)
+
+        all_boxes = []
+        all_scores = []
+        all_labels = []
+        for boxes, scores, image_shape in zip(pred_boxes_list, pred_scores_list, images.image_sizes):
+            boxes = box_ops.clip_boxes_to_image(boxes, image_shape)
+
+            # create labels for each prediction
+            labels = torch.arange(num_classes, device=device)
+            labels = labels.view(1, -1).expand_as(scores)
+
+            scores, labels = torch.max(scores, dim=1)
+            batch_indices = torch.arange(boxes.size(0), device=boxes.device)
+            
+            boxes = boxes[batch_indices, labels]
+            
+            all_boxes.append(boxes)
+            all_scores.append(scores)
+            all_labels.append(labels)
+
+
+        detections = []
+        num_images = len(all_labels)
+        for i in range(num_images):
+            detections.append(
+                {
+                    "boxes": all_boxes[i],
+                    "labels": all_labels[i],
+                    "scores": all_scores[i],
+                }
+            )
+        
+        return detections[0]['boxes'], detections[0]['labels'], detections[0]['scores']
