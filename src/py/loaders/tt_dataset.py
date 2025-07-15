@@ -39,7 +39,7 @@ from monai.transforms import (
     ToTensord
 )
 from torchvision.ops import nms
-
+import random
 from monai.data.utils import pad_list_data_collate
 
 class TTDatasetSeg(Dataset):
@@ -88,10 +88,6 @@ class TTDatasetBX(Dataset):
         self.seg_path = img_path.replace('img', 'seg').replace('.jpg', '.nrrd')
 
         df_patches = self.df.loc[ self.df[self.img_column] == subject]
-        # try:
-        #     severity = torch.tensor(df_patches.iloc[0][self.severity_column]).to(torch.long)
-        # except:
-        #     severity=0 # quick fix for previous files (undervs over) that don't have the severity column
 
         seg = torch.tensor(np.squeeze(sitk.GetArrayFromImage(sitk.ReadImage(self.seg_path)).copy())).to(torch.float32)
         img = torch.tensor(np.squeeze(sitk.GetArrayFromImage(sitk.ReadImage(img_path)).copy())).to(torch.float32)
@@ -137,7 +133,7 @@ class TTDatasetBX(Dataset):
         aug_seg = augmented['mask']
         aug_image = torch.tensor(aug_image).permute(2,0,1)
 
-        indices = nms(aug_coords, 0.5*torch.ones_like(aug_coords[:,0]), iou_threshold=.5) ## iou as args
+        indices = nms(aug_coords, 0.5*torch.ones_like(aug_coords[:,0]), iou_threshold=1.0) ## iou as args
         return {"img": aug_image, 
                 "labels": classes[indices], 
                 "boxes": aug_coords[indices] ,
@@ -184,14 +180,16 @@ class TTDatasetPatch(Dataset):
         self.patch_size = patch_size
         self.num_patches = num_patches_height
         self.resize = transforms.Resize(self.patch_size)
-
+        self.df_subject = self.df.sort_values(by=[img_column, class_column], ascending=[True, False])
+        self.df_subject = self.df_subject.drop_duplicates(subset=img_column)
 
     def __len__(self):
-        return len(self.df)
+        return len(self.df_subject)
 
     def __getitem__(self, idx):
         
-        subject = self.df.iloc[idx][self.img_column]
+        subject = self.df_subject.iloc[idx][self.img_column]
+        class_idx = self.df_subject.iloc[idx][self.class_column]
         img_path = os.path.join(self.mount_point, subject)
         seg_path = img_path.replace('img', 'seg').replace('.jpg', '.nrrd')
 
@@ -204,21 +202,15 @@ class TTDatasetPatch(Dataset):
         img = img/255.0
 
         ### preprocess image
-        bbx_eye = self.compute_eye_bbx(seg, pad=0.1)
-        ## img shape 3, Y, X
+        bbx_eye = self.compute_eye_bbx(seg, pad=0.01)
         img_cropped = img[:,bbx_eye[1]:bbx_eye[3],bbx_eye[0]:bbx_eye[2]]
         resized_image, (scale_x, scale_y) = self.resize_to_fix_height(img_cropped)
 
         img_padded, pad_x, pad_y = self.pad_image_to_fixed_size(resized_image)
-        # width = img_padded.shape[1]
-        # height = img_padded.shape[2]
 
         # Calculate the dimensions of each patch
         patch_width = torch.div(img_padded.shape[2], 2*3, rounding_mode='floor')
         patch_height = torch.div(img_padded.shape[1], 3, rounding_mode='floor')
-
-        # patch_width = 448 #torch.div(img_cropped.shape[2], 8, rounding_mode='floor')
-        # patch_height= 448 #torch.div(img_cropped.shape[1],4, rounding_mode='floor')
 
         ### compute coords x,y of annotations
         coords,labels = [],[]
@@ -226,45 +218,37 @@ class TTDatasetPatch(Dataset):
             x,y, label = row['x_patch'], row['y_patch'], row[self.class_column]
             cropped_x = (x - bbx_eye[0]) #*scale_x + pad_x
             cropped_y = (y - bbx_eye[1]) #*scale_y + pad_y
-
-            if pad_x <0:
-                print(pad_x)
             
             coord = [ min(max(0, (cropped_x - patch_width/2)), img_padded.shape[2]-10),
-                      min(max(0,(cropped_y - patch_height/2)), img_padded.shape[1]-10),
+                      min(max(0,(cropped_y - patch_height/2)), img_padded.shape[1]-10),       
                       max(min((cropped_x + patch_width/2), img_padded.shape[2]), 10),
                       max(min((cropped_y + patch_height/2), img_padded.shape[1]), 10)]
             
-            print(coord, scale_x, pad_x, subject, idx, img_padded.shape)
-            
-            # if (cropped_x - patch_width/2) >= 0 and (cropped_y - patch_height/2) >=0 and (cropped_x + patch_width/2) <= img_padded.shape[2] and (cropped_y +patch_height/2) <= img_padded.shape[1]:
-            
             coords.append(torch.tensor(coord))
-            labels.append(torch.tensor(label))    
-        # try:
+            labels.append(torch.tensor(label))
         coords = torch.stack(coords)
         labels = torch.stack(labels)
-        # except:
-        #     print()
-        ### apply data augmentation here 
         if self.transform:
-            augmented = self.transform(img_padded.permute(1,2,0).numpy(), 
-                                       coords.numpy(), 
-                                       labels.numpy())
+            try:
+                augmented = self.transform(img_padded.permute(1,2,0).numpy(), 
+                                        coords.numpy(), 
+                                        labels.numpy())
 
-            # Extract transformed image & bounding boxes
-            aug_image = augmented['image']
-            aug_coords = augmented['bboxes']
+                # Extract transformed image & bounding boxes
+                aug_image = augmented['image']
+                aug_coords = augmented['bboxes']
 
-            ### get labels and patches
-            aug_image = torch.tensor(aug_image).permute(2,0,1)
-            print(img_padded.permute(1,2,0).shape,aug_image.permute(2,0,1).shape)
-        
-            patches, patches_labels = self.extract_patches_and_labels(aug_image, labels, aug_coords, 512, 512)
+                ### get labels and patches
+                aug_image = torch.tensor(aug_image).permute(2,0,1)        
+                patches, patches_labels = self.extract_patches_and_labels(aug_image, labels, aug_coords, patch_height, patch_width)
+            except:
+                return self.__getitem__(random.randint(0, len(self) - 1))
+
         else:
-            patches, patches_labels = self.extract_patches_and_labels(img_padded, labels, coords, 512, 512)
+            patches, patches_labels = self.extract_patches_and_labels(img_padded, labels, coords, patch_height, patch_width)
 
-        return {"patches": patches, "labels": patches_labels}
+        # return {"patches": patches, "labels": patches_labels}
+        return {"patches": patches, "labels": class_idx } #class_idx
 
 
     def resize_to_fix_height(self, image):
