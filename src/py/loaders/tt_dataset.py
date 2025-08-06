@@ -450,7 +450,7 @@ class TTDataModuleBX(pl.LightningDataModule):
         #     df_train = g.apply(lambda x: x.sample(g.size().min())).reset_index(drop=True).sample(frac=1).reset_index(drop=True)
         #     self.train_ds = monai.data.Dataset(data=TTDatasetBX(df_train, mount_point=self.mount_point, img_column=self.img_column, class_column=self.class_column, transform=self.train_transform))
 
-        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=self.drop_last, collate_fn=self.balance_batch_collate_fn, shuffle=False, prefetch_factor=None)
+        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, pin_memory=True, drop_last=self.drop_last, collate_fn=self.custom_collate_fn, shuffle=False, prefetch_factor=None)
 
     def val_dataloader(self):
         # remove balancing for evaluation step for acc or p,r,f metrics
@@ -666,7 +666,7 @@ class TrainTransforms:
                 transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),  # not strengthened
                 transforms.RandomGrayscale(p=0.2),
                 transforms.RandomApply([transforms.GaussianBlur(5, sigma=(0.1, 2.0))], p=0.5),
-                transforms.RandomHorizontalFlip(),
+                transforms.RandomVerticalFlip(p=0.5),
                 transforms.RandomRotation(degrees=90)
             ]
         )
@@ -925,7 +925,7 @@ class BBXImageTrainTransform():
                 # A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                 A.LongestMaxSize(max_size_hw=(self.h, None)),
                 A.CenterCrop(height=self.h, width=self.w, pad_if_needed=True),
-                A.HorizontalFlip(),
+                A.VerticalFlip(p=0.5),
                 A.GaussNoise(),
                 A.OneOf(
                     [
@@ -962,6 +962,7 @@ class BBXImageEvalTransform():
             [
                 # A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                 A.LongestMaxSize(max_size_hw=(self.h, None)),
+                A.VerticalFlip(p=0.5),
                 A.CenterCrop(height=self.h, width=self.w, pad_if_needed=True),
             ], 
             bbox_params=A.BboxParams(format='pascal_voc', min_area=32, min_visibility=0.1, label_fields=['category_ids']),
@@ -981,6 +982,7 @@ class BBXImageTestTransform():
             [
                 # A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                 A.LongestMaxSize(max_size_hw=(self.h, None)),
+                # A.VerticalFlip(p=0.5),
                 A.CenterCrop(height=self.h, width=self.w, pad_if_needed=True),
             ], 
             bbox_params=A.BboxParams(format='pascal_voc', min_area=32, min_visibility=0.1, label_fields=['category_ids']),

@@ -81,12 +81,12 @@ def main(args):
     print(f"class weights: {args_params['class_weights']}")
 
     ttdata = TTDataModuleBX(df_train, df_val, df_test, batch_size=args.batch_size, num_workers=args.num_workers, img_column=args.img_column, class_column=args.class_column,
-                            mount_point=args.mount_point, train_transform=BBXImageTrainTransform(), valid_transform=BBXImageEvalTransform(), test_transform=BBXImageTestTransform())
+                            mount_point=args.mount_point, train_transform=BBXImageTrainTransform(768,1536), valid_transform=BBXImageEvalTransform(768,1536), test_transform=BBXImageTestTransform(768,1536))
 
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=args.out,
-        filename='{epoch}-{val_loss:.2f}',
+        filename='{epoch}-{val_loss:.3f}',
         save_top_k=2,
         monitor='val_loss',
         save_last=True,
@@ -94,7 +94,7 @@ def main(args):
 
     image_logger = FasterRCNNImageLoggerNeptune(log_steps = args.log_every_n_steps)
     if args.model:
-        model = FasterTTRCNN.load_from_checkpoint(args.model, **vars(args), strict=False)
+        model = FasterTTRCNN.load_from_checkpoint(args.model, **vars(args), strict=True)
     else:
         model = FasterTTRCNN(**vars(args))
     

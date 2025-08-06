@@ -108,7 +108,7 @@ def custom_x_nms(preds, iou_thresh=0.8):
 
 def process_predictions(preds):
   keep = preds['scores'] > 0.1
-  preds = filter_targets_indices(preds, keep, detach=False)
+  preds = filter_targets_indices(preds, keep, detach=True)
   if len(preds['scores']) >= 1:
     pred_indices = custom_x_nms(preds, iou_thresh=0.4)
     preds = filter_targets_indices(preds, pred_indices, detach=False)
@@ -122,11 +122,27 @@ def process_predictions(preds):
 mnt_ckpt = '/CMF/data/lumargot/trachoma/output/backtoold'
 
 all_checkpoints = [
-                  #  '5fold_v1/fold0/last.ckpt', '5fold_v1/fold1/epoch=27-val_loss=1.94.ckpt', '5fold_v1/fold2/epoch=11-val_loss=1.52.ckpt','5fold_v1/fold3/epoch=18-val_loss=1.49.ckpt','5fold_v1/fold4/epoch=24-val_loss=1.52.ckpt', 
-                  #  '5fold_v2/fold0/epoch=12-val_loss=2.08.ckpt', '5fold_v2/fold1/epoch=27-val_loss=1.72.ckpt','5fold_v2/fold2/epoch=9-val_loss=1.79.ckpt', 
-                  #  '5fold_v2/fold3/epoch=21-val_loss=2.00.ckpt','5fold_v2/fold4/epoch=12-val_loss=1.66.ckpt',
-                   '5fold_v4/fold0/epoch=22-val_loss=2.20.ckpt','5fold_v4/fold1/epoch=7-val_loss=1.73.ckpt','5fold_v4/fold2/epoch=20-val_loss=1.83.ckpt','5fold_v4/fold3/epoch=16-val_loss=1.83.ckpt','5fold_v4/fold4/epoch=11-val_loss=1.93.ckpt',
-                  #  '5fold_batch/fold0/epoch=8-val_loss=2.28.ckpt','5fold_batch/fold1/epoch=23-val_loss=2.20.ckpt','5fold_batch/fold2/epoch=19-val_loss=1.85.ckpt','5fold_batch/fold3/last.ckpt','5fold_batch/fold4/epoch=13-val_loss=2.15.ckpt',
+
+'5fold_weights/fold0/epoch=7-val_loss=0.900.ckpt', 
+'5fold_weights/fold0/epoch=8-val_loss=0.893.ckpt', 
+'5fold_weights/fold0/last.ckpt',
+
+'5fold_weights/fold1/epoch=4-val_loss=0.906.ckpt', 
+'5fold_weights/fold1/epoch=5-val_loss=0.894.ckpt', 
+'5fold_weights/fold1/last.ckpt', 
+
+'5fold_weights/fold2/epoch=3-val_loss=0.950.ckpt', 
+'5fold_weights/fold2/epoch=4-val_loss=0.939.ckpt', 
+'5fold_weights/fold2/last.ckpt', 
+
+'5fold_weights/fold3/epoch=11-val_loss=0.949.ckpt', 
+'5fold_weights/fold3/epoch=3-val_loss=0.934.ckpt', 
+'5fold_weights/fold3/last.ckpt', 
+
+'5fold_weights/fold4/epoch=4-val_loss=0.933.ckpt', 
+'5fold_weights/fold4/epoch=5-val_loss=0.941.ckpt', 
+'5fold_weights/fold4/last.ckpt', 
+
 ]
 
 
@@ -160,8 +176,8 @@ df_val = remove_labels(df_val, class_column, label_column, drop_labels=drop_labe
 
 ttdata = TTDataModuleBX(df_train, df_val, df_test, batch_size=1, num_workers=1, img_column='filename',severity_column='sev', 
                         mount_point=mount_point, class_column= class_column,
-                        train_transform=BBXImageEvalTransform(), 
-                        valid_transform=BBXImageEvalTransform(), 
+                        train_transform=BBXImageTestTransform(), 
+                        valid_transform=BBXImageTestTransform(), 
                         test_transform=BBXImageTestTransform(height=666, width=1333))
 ttdata.setup()
 dataload = ttdata.test_dataloader()
@@ -169,17 +185,21 @@ ds = ttdata.test_ds
 
 for ckpt_name in all_checkpoints:
     ckpt = os.path.join(mnt_ckpt, ckpt_name)
-    model = FasterTTRCNN(out_features=4, class_weights = torch.ones(4))
-    state_dict = torch.load(ckpt, weights_only=False, map_location='cpu') # or 'cuda' if loading to GPU
-    model.load_state_dict(state_dict['state_dict'])
+    model = FasterTTRCNN.load_from_checkpoint(ckpt, strict=True)
     model.eval()
+    model.cuda()
+
+    # model = FasterTTRCNN(out_features=4, class_weights = torch.ones(4))
+    # state_dict = torch.load(ckpt, weights_only=False, map_location='cuda') # or 'cuda' if loading to GPU
+    # model.load_state_dict(state_dict['state_dict'])
+    # model.eval()
 
 
-    rpn = TTRPN(model.model)
-    rpn.eval
+    # rpn = TTRPN(model.model)
+    # rpn.eval
 
-    roi_head = TTRoidHead(model.model)
-    roi_head.eval()
+    # roi_head = TTRoidHead(model.model)
+    # roi_head.eval()
 
     num_preds,num_fps,num_fns = 0, 0, 0
     l_ious, l_distances = [], []
@@ -194,14 +214,17 @@ for ckpt_name in all_checkpoints:
     
         targets = batch
         imgs = targets.pop('img', None)
+        outs = model(imgs, mode='test')
+        out_img = outs[0]
 
-        proposals = rpn(imgs)
-        out = roi_head(imgs, proposals)
-        out_dict = [{'boxes':torch.tensor(out[0]), 'labels':torch.tensor(out[1]),  'scores':torch.tensor(out[2])}]
+
+        # proposals = rpn(imgs)
+        # out = roi_head(imgs, proposals)
+        # out_dict = [{'boxes':torch.tensor(out[0]), 'labels':torch.tensor(out[1]),  'scores':torch.tensor(out[2])}]
 
         # out_dict = [{'boxes':torch.tensor(boxes_tf)[:, [0,2,1,3]], 'labels':torch.tensor(labels_tf),  'scores':torch.tensor(scores_tf)}]
-        out_dict = roi_head.faster.transform.postprocess(out_dict, roi_head.images_shapes, roi_head.og_sizes)
-        out_img = out_dict[0]
+        # out_dict = roi_head.faster.transform.postprocess(out_dict, roi_head.images_shapes, roi_head.og_sizes)
+        # out_img = out_dict[0]
 
 
         # remove overlapping boxes with iou > 0.7  
