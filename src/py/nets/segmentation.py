@@ -524,14 +524,14 @@ class FasterTTRCNN(pl.LightningModule):
             self.log(f'val/{n}', loss, sync_dist=True)
         self.log('val_loss', total_loss,sync_dist=True,batch_size=self.hparams.batch_size)
 
-        f1_macro, f1_per_class, balanced_acc = self.evaluate_accuracy(val_batch[0], val_batch[1], preds)
+        # f1_macro, f1_per_class, balanced_acc = self.evaluate_accuracy(val_batch[0], val_batch[1], preds)
 
         # Log with PyTorch Lightning + Neptune
-        self.log("val_acc/f1_macro", f1_macro)
-        self.log("val_acc/balanced_acc", balanced_acc)
+        # self.log("val_acc/f1_macro", f1_macro)
+        # self.log("val_acc/balanced_acc", balanced_acc)
         
-        for i, score in enumerate(f1_per_class):
-            self.log(f"val_acc/f1_class_{i}", score)
+        # for i, score in enumerate(f1_per_class):
+        #     self.log(f"val_acc/f1_class_{i}", score)
 
     def predict_step(self, images):
 
