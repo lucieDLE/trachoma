@@ -10,7 +10,7 @@ import torch
 torch.set_float32_matmul_precision('medium')
 
 from nets import classification
-from loaders.tt_dataset import TTDataModuleSeg, TTDataModulePatch, TrainTransformsFullSeg, EvalTransformsFullSeg
+from loaders.tt_dataset import TTDataModuleSeg, TTDataModulePatch, TrainTransformsFullSeg, EvalTransformsFullSeg, BBXImageTrainTransform
 
 from lightning import Trainer
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
@@ -64,13 +64,14 @@ def main(args):
     df_val = remove_labels(df_val, args)
     df_test = remove_labels(df_test, args)
 
-    print(df_train[['label','class']].drop_duplicates())
+    df_subject = df_train.sort_values(by=[args.img_column, 'class'], ascending=[True, False])
+    df_subject = df_subject.drop_duplicates(subset=args.img_column)
 
     unique_classes = np.sort(np.unique(df_train[class_column]))
     args_params['out_features'] = len(unique_classes)
 
     if args.balanced_weights:
-        unique_class_weights = np.array(class_weight.compute_class_weight(class_weight='balanced', classes=unique_classes, y=df_train[class_column]))
+        unique_class_weights = np.array(class_weight.compute_class_weight(class_weight='balanced', classes=unique_classes, y=df_subject[class_column]))
         print(unique_classes, unique_class_weights)
         args_params['class_weights'] = unique_class_weights
 
@@ -102,8 +103,8 @@ def main(args):
         g_val = df_val.groupby(args.class_column)
         df_val = g_val.apply(lambda x: x.sample(g_val.size().min())).reset_index(drop=True).sample(frac=1).reset_index(drop=True)
     
-    # ttdata = TTDataModuleSeg(df_train, df_val, df_test, batch_size=args.batch_size, num_workers=args.num_workers, img_column=args.img_column, seg_column=args.seg_column, class_column=args.class_column, mount_point=args.mount_point, train_transform=train_transform, valid_transform=eval_transform, test_transform=eval_transform, drop_last=True)
-    ttdata = TTDataModulePatch(df_train, df_val, df_test, batch_size=args.batch_size, num_workers=args.num_workers, img_column=args.img_column, class_column=args.class_column, mount_point=args.mount_point, drop_last=True)
+    ttdata = TTDataModuleSeg(df_train, df_val, df_test, batch_size=args.batch_size, num_workers=args.num_workers, img_column=args.img_column, seg_column=args.seg_column, class_column=args.class_column, mount_point=args.mount_point, train_transform=train_transform, valid_transform=eval_transform, test_transform=eval_transform, drop_last=True)
+    # ttdata = TTDataModulePatch(df_train, df_val, df_test, batch_size=args.batch_size, num_workers=args.num_workers, img_column=args.img_column, class_column=args.class_column, mount_point=args.mount_point, drop_last=True, train_transform=BBXImageTrainTransform())
 
 
     checkpoint_callback = ModelCheckpoint(
@@ -145,7 +146,7 @@ def main(args):
         log_every_n_steps=args.log_every_n_steps,
         accumulate_grad_batches=args.accumulate_grad_batches,
         reload_dataloaders_every_n_epochs=1,
-        val_check_interval=0.3,
+        val_check_interval=0.1,
     )
     trainer.fit(model, datamodule=ttdata, ckpt_path=args.model)
     

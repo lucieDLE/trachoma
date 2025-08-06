@@ -9,8 +9,6 @@ import torchvision
 import SimpleITK as sitk
 
 from  PIL  import  Image
-from basicsr.archs.rrdbnet_arch import RRDBNet
-from realesrgan import RealESRGANer
 
 def compute_patch_size(seg, pad):
   seg = torch.Tensor(seg)
@@ -26,7 +24,7 @@ def compute_patch_size(seg, pad):
 
   patch_w = (bb[2] - bb[0])/10
 
-  patch_size = min(int(patch_w), 64)
+  patch_size = min(int(patch_w), 256)
   return patch_size, bb
 
 def compute_patch_location(seg, pad=29, step=20):
@@ -63,21 +61,18 @@ def isPointInBoundingBox(point, bb):
 
 
 
-img_dir = '/CMF/data/lumargot/trachoma/B images one eye/img'
-seg_dir = '/CMF/data/lumargot/trachoma/B images one eye/corrected_seg'
-csv_dir = '/CMF/data/lumargot/trachoma/patches/csv_subjects'
-out_dir = '/CMF/data/lumargot/trachoma/patches/added_patches/esgran'
-
-weight_path = '/CMF/data/lumargot/trachoma/output/Real_Esrgan_weights/RealESRGAN_x4plus.pth'
-
-SCALE=4
-model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=SCALE)
-upsampler = RealESRGANer(scale=SCALE, model_path=weight_path, dni_weight=None, model=model)
+img_dir = '/CMF/data/lumargot/trachoma/PoPP_Data/mtss/img'
+seg_dir = '/CMF/data/lumargot/trachoma/PoPP_Data/mtss/seg'
+csv_dir = '/CMF/data/lumargot/trachoma/PoPP_Data/mtss/old_patches'
+out_dir = '/CMF/data/lumargot/trachoma/PoPP_Data/mtss/256_patches'
 
 
 
 csv_list = os.listdir(csv_dir)
 num_subject = len(csv_list)
+map = { 'Healthy':0, 'ECA':1, 'Entropion':2, 'Gap':3, 'overcorrection':4, 'Short Incision':5,  'Fleshy':6}
+
+l_patch, l_cid, l_x, l_y, l_label, l_class, l_img = [], [], [], [], [],[],[]
 
 for index_csv in range(num_subject):
   csv_name = csv_list[index_csv]
@@ -93,48 +88,44 @@ for index_csv in range(num_subject):
   seg  = np.squeeze(sitk.GetArrayFromImage(sitk.ReadImage(seg_path)))
   H,W = image.shape[:2]
 
+  patch_sz, bb = compute_patch_size(seg, pad=1)
+  for idx, row in df.iterrows():
+    x,y, label = row['x'], row['y'], row['label']
+    if '/' in label:
+      label = label.replace('/', '_')
+    if label == 'Wavy_ECA':
+      label = 'ECA'
 
-  try:
+    if label in map.keys():
 
-    patch_sz, bb = compute_patch_size(seg, pad=1)
-    seg_cropped = seg[bb[1]:bb[3], bb[0]: bb[2]]
-    x_axis, y_axis = compute_patch_location(seg_cropped, pad=patch_sz, step=20)
+      xmin = int(max((x-patch_sz), 0))
+      ymin = int(max((y-5*patch_sz/3), 0))
 
-    # from crop to full size values
-    x_axis += bb[0].numpy()
-    y_axis += bb[1].numpy()
+      xmax = int(min((x+patch_sz), W))
+      ymax = int(min((y+patch_sz/3), H))
 
-    for (x_center, y_center) in zip(x_axis,y_axis):
-      y_center=int(y_center)
-      y_center = max(patch_sz, y_center)
-      y_center = min(image.shape[0] - patch_sz, y_center)
+      img = image[ymin:ymax, xmin:xmax]
+      img_tmp = cv2.resize(img, (256, 256), interpolation=cv2.INTER_CUBIC)
+      
+      name = f"patch_{subject_name}_{x}x_{y}y_class_{label}.jpg"
 
-      x_center = max(patch_sz, x_center)
-      x_center = min(image.shape[1] - patch_sz, x_center)
+      l_img.append(os.path.join('img', subject_name +'.jpg'))
+      l_cid.append(subject_name.split('_')[0])
+      l_x.append(x)
+      l_y.append(y)
+      l_label.append(label)
+      l_class.append(int(map[label]))
+      l_patch.append(os.path.join('patches', name))
 
-      bb = [x_center-patch_sz, y_center-patch_sz, x_center+patch_sz, y_center+patch_sz]
-      patch = image[bb[1]:bb[3], bb[0]:bb[2]]
+      pi_up_img = Image.fromarray(img_tmp)
+      pi_up_img.save(os.path.join(out_dir, name))
 
-      labels = set()
-      for idx, row in df.iterrows():
-        x,y, label = row['x'], row['y'], row['label']
-        if '/' in label:
-          label = label.replace('/', '_')
-        if isPointInBoundingBox((x,y), bb):
-          labels.add(label)
-
-      ## if no labels -> not in bbx. if more than 1, outcomes conflict
-      if len(labels) == 1:
-        labels = list(labels)
-        if patch.shape[0] < 128:
-          img_tmp = cv2.resize(patch, (128, 128), interpolation=cv2.INTER_CUBIC)
-        else:
-          img_tmp = patch
-        
-        upscaled_image, _ = upsampler.enhance(img_tmp)
-        name = f"patch_{subject_name}_{x_center}x_{y_center}y_class_{labels[0]}.png"
-        pi_up_img = Image.fromarray(upscaled_image)
-        pi_up_img.save(os.path.join(out_dir, name))
-
-  except:
-    print(f"Error with subject: {subject_name}")
+df_out = pd.DataFrame(data={'patch':l_patch,
+                            'cid':l_cid,
+                            'x_patch':l_x,
+                            'y_patch':l_y,
+                            'label':l_label,
+                            'class':l_class,
+                            'filename':l_img
+})
+df_out.to_csv('/CMF/data/lumargot/trachoma/PoPP_Data/annotations_set_062025.csv')
