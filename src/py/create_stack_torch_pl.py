@@ -179,7 +179,7 @@ def main(args):
                 img = img.replace(args.csv_root, '')
             
             if args.dir:
-                img = img.replace(args.dir, '')
+                img = os.path.basename(img)
 
             out = os.path.normpath(os.path.join(args.out, img)).replace(".jpg", ".nrrd")
 
