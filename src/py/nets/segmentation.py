@@ -15,6 +15,10 @@ from visualization import select_eyelid_seg, filter_indices_on_segmentation_mask
 from monai.transforms import (
     ToTensord
 )
+from torchvision.transforms import Resize
+import cv2
+import pdb
+from transformers import AutoImageProcessor, AutoModel, Dinov2ForImageClassification,AutoModelForImageClassification
 from torchvision.models.detection.roi_heads import RoIHeads, fastrcnn_loss
 from torchvision.ops import nms
 import lightning.pytorch as pl
@@ -44,6 +48,107 @@ class TTUSegTorch(nn.Module):
         x = torch.argmax(x, dim=1, keepdim=True)
         x = x.type(torch.uint8)
         return x
+
+
+class HybridEyelidClassifier(pl.LightningModule):
+    def __init__(self, num_classes=3, input_channels=4, **kwargs):
+        super(HybridEyelidClassifier, self).__init__()
+        self.save_hyperparameters()
+                
+        self.loss = nn.CrossEntropyLoss(weight=torch.tensor(self.hparams.class_weights).to(torch.float32))
+        
+        self.accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=num_classes)
+        self.effnet = models.efficientnet_b0(pretrained=True)
+
+
+        # self.conv2d = self.effnet.features[0]
+        # self.encod_layer1 = self.effnet.features[1]
+        # self.encod_layer2 = self.effnet.features[2]
+        # self.encod_layer3 = self.effnet.features[3]
+
+        self.norm_layer1 = nn.InstanceNorm2d(16, affine=True)
+        self.norm_layer2 = nn.InstanceNorm2d(24, affine=True)
+        self.norm_layer3 = nn.InstanceNorm2d(40, affine=True)
+
+        self.transform_layer1 = Resize(size=(384, 768))
+        self.transform_layer2 = Resize(size=(192, 384))
+        self.transform_layer3 = Resize(size=(96, 192))
+
+        list_layers = [ self.effnet.features[i] for i in range(4,9) ]
+        self.decoder = nn.Sequential(*list_layers)
+        
+        self.classifier = nn.Sequential(
+            nn.Dropout(0.2, inplace=True),
+            nn.Linear(1280, num_classes)
+        )
+
+
+    def forward(self, img, seg):
+
+        x = self.effnet.features[0](img)
+
+        x = self.effnet.features[1](x)
+        downsized_seg = self.transform_layer1(seg)
+        x = x + downsized_seg
+        x = self.norm_layer1(x)
+
+        x = self.effnet.features[2](x)
+        downsized_seg = self.transform_layer2(seg)
+        x = x + downsized_seg
+        x = self.norm_layer2(x)
+
+        x = self.effnet.features[3](x)
+        downsized_seg = self.transform_layer3(seg)
+        x = x + downsized_seg
+        x = self.norm_layer3(x)
+
+        x = self.decoder(x)
+
+        x = self.effnet.avgpool(x)
+        x = torch.flatten(x, 1)
+        
+        output = self.classifier(x)
+        return output
+    
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=0.01)
+        # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+        return [optimizer]
+        # [scheduler]
+    
+    def training_step(self, batch, batch_idx):
+
+        img = batch["img"] 
+        seg = batch["seg"].unsqueeze(1) if len(batch["seg"].shape) == 3 else batch["seg"] 
+        y = batch['class']
+
+        logits = self.forward(img, seg)
+        loss = self.loss(logits, y)
+        
+        preds = torch.argmax(logits, dim=1)
+        acc = self.accuracy(preds, y)
+        
+        self.log('train_loss', loss, on_step=True, on_epoch=True)
+        self.log('train_acc', acc, on_step=True, on_epoch=True)
+        
+        return loss
+    
+    def validation_step(self, batch, batch_idx):
+        img = batch["img"]
+        seg = batch["seg"].unsqueeze(1) if len(batch["seg"].shape) == 3 else batch["seg"]
+        y = batch["class"]
+
+        logits = self.forward(img, seg)
+        loss = self.loss(logits, y)
+        
+        preds = torch.argmax(logits, dim=1)
+        acc = self.accuracy(preds, y)
+
+        self.log('val_loss', loss, on_step=False, on_epoch=True)
+        self.log('val_acc', acc, on_step=False, on_epoch=True)
+        
+        return {"val_loss": loss, "preds": preds, "targets": y}
+
 
 class TTUNet(pl.LightningModule):
     def __init__(self, out_channels=4, **kwargs):
@@ -87,8 +192,8 @@ class TTUNet(pl.LightningModule):
         self.log('train_loss', loss, batch_size=batch_size)        
 
         # x = torch.argmax(x, dim=1, keepdim=True)
-        # self.accuracy(x.reshape(-1, 1), y.reshape(-1, 1))
-        # self.log("train_acc", self.accuracy, batch_size=batch_size)
+    
+    
         
         return loss
 
@@ -105,8 +210,8 @@ class TTUNet(pl.LightningModule):
         self.log('val_loss', loss, batch_size=batch_size)
         
         # x = torch.argmax(x, dim=1, keepdim=True)
-        # self.accuracy(x.reshape(-1, 1), y.reshape(-1, 1))
-        # self.log("val_acc", self.accuracy, batch_size=batch_size)
+    
+    
 
     def predict_step(self, images):
         return  self(images)
@@ -400,7 +505,6 @@ class MobileYOLO(pl.LightningModule):
 
 # Define custom RoIHeads with class weights. Need forward pass to access needed data.
 # Re-apply functions to get the labels. Needed because shapes are differents -> class logits has a 
-# shape matching the number of regions proposed (n=100) and not the number of boxes passed in the batch 
 class CustomRoIHeads(RoIHeads):
     def __init__(self, *args, hparams=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -527,8 +631,8 @@ class FasterTTRCNN(pl.LightningModule):
         # f1_macro, f1_per_class, balanced_acc = self.evaluate_accuracy(val_batch[0], val_batch[1], preds)
 
         # Log with PyTorch Lightning + Neptune
-        # self.log("val_acc/f1_macro", f1_macro)
-        # self.log("val_acc/balanced_acc", balanced_acc)
+    
+    
         
         # for i, score in enumerate(f1_per_class):
         #     self.log(f"val_acc/f1_class_{i}", score)
