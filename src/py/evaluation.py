@@ -188,3 +188,78 @@ def process_predictions(preds):
   if len(preds['scores']) >= 1:
     preds = replace_sandwiched_labels(preds)
   return preds
+
+
+def get_outcome_from_list(list_name):
+  if len(list_name) > 0:
+    unique_outcomes, counts = np.unique(list_name, return_counts=True)
+
+    idx = np.argmax(counts)
+
+    if len(unique_outcomes) == 3:
+      outcome = unique_outcomes[idx]
+      if outcome == 0:
+        if counts[1] > 2:
+          outcome = 1
+        elif counts[2] > 2:
+          outcome = 2
+
+      print(unique_outcomes, counts, " -- >", outcome)
+
+    elif len(unique_outcomes) == 2:
+      if 0 in unique_outcomes:
+        if counts[1] > 2: outcome = max(list_name)
+        else: outcome = 0
+
+      else: 
+        outcome =unique_outcomes[idx]
+      print(unique_outcomes, counts, " -- >", outcome)
+
+    elif len(unique_outcomes) == 1:
+        outcome = list_name[0]
+    else:
+      outcome =-1  
+  
+
+  else: return -1 
+  
+  return outcome
+
+def get_outcome_per_section(x, labels, portion_side):
+  max_l = portion_side
+  max_middle = 2*portion_side
+  
+  l_left, l_middle, l_right = [], [], []
+
+  x = x.to_list()
+  labels = labels.to_list()
+
+  for i in range(len(x)):
+    if x[i] < max_l:
+      l_left.append(labels[i])
+    elif max_l <= x[i] < max_middle:
+      l_middle.append(labels[i])
+    else:
+      l_right.append(labels[i])
+
+  outcome_left = get_outcome_from_list(l_left)
+  outcome_middle = get_outcome_from_list(l_middle)
+  outcome_right = get_outcome_from_list(l_right)
+
+  return outcome_left, outcome_middle, outcome_right
+
+
+def compute_eye_bbx(seg, label=1, pad=0.01):
+
+  shape = seg.shape
+  
+  ij = torch.argwhere(seg.squeeze() != 0)
+
+  bb = torch.tensor([0, 0, 0, 0])# xmin, ymin, xmax, ymax
+
+  bb[0] = torch.clip(torch.min(ij[:,1]) - shape[1]*pad, 0, shape[1])
+  bb[1] = torch.clip(torch.min(ij[:,0]) - shape[0]*pad, 0, shape[0])
+  bb[2] = torch.clip(torch.max(ij[:,1]) + shape[1]*pad, 0, shape[1])
+  bb[3] = torch.clip(torch.max(ij[:,0]) + shape[0]*pad, 0, shape[0])
+  
+  return bb
