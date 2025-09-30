@@ -122,7 +122,7 @@ def main(args):
 
             if args.out_seg:
 
-                out_seg = os.path.normpath(os.path.join(args.out_seg, img)).replace(".jpg", ".nrrd")                    
+                out_seg = os.path.join(args.out_seg,os.path.basename(img)).replace(".jpg", ".nrrd")                    
 
                 out_seg_dir = os.path.dirname(out_seg)
 
@@ -141,7 +141,7 @@ def main(args):
                     os.makedirs(out_seg_res_dir)
             
             if args.ow or (not os.path.exists(out_seg) or not os.path.exists(out_seg_res)):
-                img_out.append({'img': os.path.join(args.csv_root,row[args.img_column]), 'out_seg': out_seg, 'out_seg_res': out_seg_res})
+                img_out.append({'img': row[args.img_column], 'out_seg': out_seg, 'out_seg_res': out_seg_res})
 
         df_out = pd.DataFrame(img_out)
 
@@ -199,7 +199,7 @@ if __name__ == '__main__':
     parser.add_argument('--img_column', type=str, help='Name of column in csv file', default="image")
     
     parser.add_argument('--seg_model', type=str, help='Segmentation torch model', default='/work/jprieto/data/remote/EGower/jprieto/train/Analysis_Set_202208/segmentation_unet/v3/epoch=490-val_loss=0.07.ckpt')
-    parser.add_argument('--seg_nn', type=str, help='model name', choices=['TTUnet', 'TTRCNN'])
+    parser.add_argument('--seg_nn', type=str, help='model name', choices=['TTUNet', 'TTRCNN'])
 
     # parser.add_argument('--predict_model', type=str, help='Segmentation torch model', default='/work/jprieto/data/remote/EGower/jprieto/trained/train_stack_efficientv2s_01042022_saved_model')
 

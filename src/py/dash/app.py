@@ -35,38 +35,49 @@ app = Dash(__name__, external_stylesheets=external_stylesheets)
 # test_df = pd.read_csv(csv_path_stacks).replace("hinashah/", "", regex=True)
 # test_df['tt sev'] = (test_df['tt sev'] >= 1).astype(int)
 
-sev_col = 'sev'
-id_col = 'id'
+sev_col = 'class'
+id_col = 'cid'
 
 #### @Juan: Hina ha scommented the following two lines
 #
 if os.name == 'nt':
     mount_dir="M:/EGower/"
 else:
-    mount_dir = "/work/jprieto/data/remote/EGower/"
+    # mount_dir = "/work/jprieto/data/remote/EGower/"
+    # mount_dir = '/CMF/data/'
+    mount_dir = '/GROND_STOR/lmargot/trachoma'
 # csv_path = "Analysis_Set_20220422/trachoma_bsl_mtss_besrat_field_test_20220422.csv"
-csv_path = os.path.join(mount_dir, "hinashah/Analysis_Set_202208/trachoma_bsl_mtss_besrat_field_test_202208.csv")
+# csv_path = os.path.join(mount_dir, "hinashah/Analysis_Set_202208/trachoma_bsl_mtss_besrat_field_test_202208.csv")
+# csv_path = '/home/lumargot/trachoma/src/py/out/3_classes/MulliHead_1024/multihead_1024/Pret_test_epoch=38-val_loss=1.02_prediction.csv'
+csv_path='/CMF/data/lumargot/trachoma/csv_ECA_PTT/PTT/PoPP/train_out/PoPP_PTT_NORM_test_epoch=63-val_loss=0.67_prediction.csv'
+csv_path='/CMF/data/lumargot/trachoma/csv_ECA_PTT/ECA/PoPP/train_out/PoPP_ECA_NORM_test_epoch=38-val_loss=0.65_good_prediction.csv'
 # print(mount_dir)
 test_df = pd.read_csv(csv_path)
 # .replace("hinashah/", "", regex=True)
-test_df[sev_col] = (test_df[sev_col] >= 1).astype(int)
+# test_df[sev_col] = (test_df[sev_col] >= 1).astype(int)
 
 # csv_path_stacks = csv_path.replace(".csv", "_stacks.csv")
 # with open(csv_path_stacks.replace(".csv", "_25042022_prediction.pickle"), 'rb') as f:
     # results_epi = pickle.load(f)
 
-with open(csv_path.replace(".csv", "_stacks_features.pickle"), 'rb') as f:
+with open(csv_path.replace(".csv", ".pickle"), 'rb') as f:
     results_epi = pickle.load(f)
 
-x, x_a, x_s, x_v, x_v_p = results_epi
+# x, x_a, x_s, x_v, x_v_p = results_epi
+x, x_a, x_v = results_epi
+preds_x = np.argmax(x, axis=1)
 
-x_s = np.max(x_s, axis=-1)
 
-pca_epi = PCA(n_components=2)
+# x_s = np.max(x_s, axis=-1)
+
+pca_epi = PCA(n_components=3)
 pca_epi_fit = pca_epi.fit_transform(x_a)
 test_df["pca_0"] = pca_epi_fit[:,0]
 test_df["pca_1"] = pca_epi_fit[:,1]
 test_df["pred"] = np.argmax(x, axis=1)
+
+print(np.unique(test_df[sev_col]))
+embed_dim = 1024
 
 @app.callback(
     Output('studies-img', 'figure'),    
@@ -78,7 +89,9 @@ def studies_img(dict_points, fig, color_by, studies_search):
 
     if fig is None:
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=test_df["pca_0"], y=test_df["pca_1"], mode='markers', showlegend=False, marker=dict(size=(test_df["pred"] + 1)*5, colorscale='sunset', showscale=True, opacity=1, line=dict(color='red', width=1)
+        fig.add_trace(go.Scatter(x=test_df["pca_0"], y=test_df["pca_1"], mode='markers', showlegend=True, 
+                                 marker=dict(size=(test_df["pred"] + 1)*5, colorscale='sunset', showscale=True, 
+                                opacity=1, line=dict(color='red', width=1)
         )))
         fig.add_trace(go.Scatter(mode='markers', showlegend=False, marker=dict(line=dict(color='red', width=1))))
     else:
@@ -91,13 +104,10 @@ def studies_img(dict_points, fig, color_by, studies_search):
         fig.data[1]['x'] = [test_df.loc[idx]["pca_0"]]
         fig.data[1]['y'] = [test_df.loc[idx]["pca_1"]]
 
-        if(color_by == 'class'):
-            color = test_df[sev_col]
-        elif(color_by == 'max'):            
-            color = np.max(x_s, axis=1).reshape(-1)
+        color = test_df[sev_col]
 
         fig.data[0]['marker']['color'] = color
-        fig.data[0]['text'] = ['s: {:f}, c: {:f}, p: {:f}'.format(s, c, p) for s, c, p in zip(np.max(x_s, axis=1).reshape(-1), test_df[sev_col], test_df['pred'])]        
+        fig.data[0]['text'] = ['c: {:f}, p: {:f}'.format(c, p) for c, p in zip(test_df[sev_col], test_df['pred'])]        
     
     if studies_search is not None and studies_search != '':
         fig.data[0]['marker']['opacity'] = (test_df[id_col].astype(str).str.match(studies_search).astype(float))
@@ -106,8 +116,6 @@ def studies_img(dict_points, fig, color_by, studies_search):
 
     fig.update_layout(autosize=True)
     return fig
-
-
 
 @app.callback(
     Output('study-level', 'figure'),    
@@ -124,7 +132,9 @@ def update_study(dict_points, fig_study, dict_points_study, frame_id):
     if fig_study is None:    
         fig_study = go.Figure()
         fig_study.add_trace(
-            go.Scatter(mode='markers', showlegend=False, marker=dict(showscale=True, size=10, cmin=np.min(x_v_p), cmax=np.max(x_v_p), colorscale='sunset', line=dict(color='red', width=1)))
+            go.Scatter(mode='markers', showlegend=False, 
+                       marker=dict(showscale=True, size=10, cmin=np.min(preds_x), cmax=np.max(preds_x), 
+                                   colorscale='sunset', line=dict(color='red', width=1)))
             )
 
         fig_study.add_trace(go.Scatter(mode='markers', marker=dict(size=10, line=dict(color='magenta', width=2)), showlegend=False))
@@ -135,32 +145,32 @@ def update_study(dict_points, fig_study, dict_points_study, frame_id):
 
         idx = dict_points["points"][0]["pointIndex"]
         
-        x_feat_idx = np.array(x_v[idx]).reshape(-1, 1536)
+        x_feat_idx = np.array(x_a[idx]).reshape(-1, embed_dim)
         x_feat_idx_pca = pca_epi.transform(x_feat_idx)
 
         df_idx = pd.DataFrame({
             "pca_0": x_feat_idx_pca[:,0],
             "pca_1": x_feat_idx_pca[:,1],
-            "pred": np.array(np.argmax(x_v_p[idx], axis=1)).reshape(-1), 
-            "score": np.array(x_s[idx]).reshape(-1)
+            "pred": np.array(np.argmax(x[idx])).reshape(-1), 
+            # "score": np.array(x_s[idx]).reshape(-1)
             })
         
         fig_study.data[0]['x'] = df_idx["pca_0"]
         fig_study.data[0]['y'] = df_idx["pca_1"]
-        fig_study.data[0]['text'] = ['idx: {:d}, s: {:f}, p: {:f}'.format(i, s, p) for i, s, p in zip(range(len(df_idx)), df_idx['score'], df_idx['pred'])]
-        fig_study.data[0]['marker']['color'] = df_idx["score"]
-        fig_study.data[0]['marker']['cmin'] = np.min(x_s)
-        fig_study.data[0]['marker']['cmax'] = np.max(x_s)
+        fig_study.data[0]['text'] = ['idx: {:d}, s: {:f}, p: {:f}'.format(i, s, p) for i, s, p in zip(range(len(df_idx)), df_idx['class'], df_idx['pred'])]
+        fig_study.data[0]['marker']['color'] = df_idx["pred"]
+        # fig_study.data[0]['marker']['cmin'] = np.min(x_s)
+        # fig_study.data[0]['marker']['cmax'] = np.max(x_s)
 
         if dict_points_study is not None and dict_points_study["points"] is not None and len(dict_points_study["points"]) > 0 and dict_points_study["points"][0]["curveNumber"] == 0:
                 fig_study.data[1]['x'] = [df_idx["pca_0"][frame_id]]
                 fig_study.data[1]['y'] = [df_idx["pca_1"][frame_id]]
-                fig_study.data[1]['text'] = ['idx: {:d}, s: {:f}, p: {:f}'.format(frame_id, df_idx['score'][frame_id],  df_idx['pred'][frame_id])]
+                fig_study.data[1]['text'] = ['idx: {:d}, s: {:f}, p: {:f}'.format(frame_id, df_idx['class'][frame_id],  df_idx['pred'][frame_id])]
         
         if(ctx.triggered[0]['prop_id'] == 'frame-id.value'):
             fig_study.data[1]['x'] = [df_idx["pca_0"][frame_id]]
             fig_study.data[1]['y'] = [df_idx["pca_1"][frame_id]]
-            fig_study.data[1]['text'] = ['idx: {:d}, s: {:f}, p: {:f}'.format(frame_id, df_idx['score'][frame_id],  df_idx['pred'][frame_id])]
+            fig_study.data[1]['text'] = ['idx: {:d}, s: {:f}, p: {:f}'.format(frame_id, df_idx['class'][frame_id],  df_idx['pred'][frame_id])]
     
     fig_study.update_layout(
         autosize=True
@@ -197,7 +207,8 @@ def update_img(dict_points, opacity, size):
         fig_img = px.imshow(img_np, binary_string=True, binary_compression_level=5, binary_backend='pil')
 
         # img_path = os.path.join("/work/jprieto/data/remote/EGower/hinashah/Analyses_Set_20220321_Images_seg/", test_df.loc[idx]["image"].replace(".jpg", ".nrrd"))        
-        img_path = os.path.join(mount_dir, "hinashah_organized/Data/Segmentations_Pred", test_df.loc[idx]["image"].replace("hinashah/", "").replace(".jpg", ".nrrd")).replace(os.sep, "/")
+        img_path = os.path.join(mount_dir,test_df.loc[idx]["seg"])
+        # img_path = os.path.join(mount_dir, "hinashah_organized/Data/Segmentations_Pred", test_df.loc[idx]["image"].replace("hinashah/", "").replace(".jpg", ".nrrd")).replace(os.sep, "/")
         img_np = sitk.GetArrayFromImage(sitk.ReadImage(img_path)).astype(np.ubyte)
         
         fig_img.add_trace(go.Heatmap(z=img_np, opacity=opacity, colorscale='rdbu'))
@@ -220,23 +231,23 @@ def update_frames(idx, frame_id, opacity):
     idx = int(idx.replace("idx: ", ""))
 
     if idx >= 0:
-        img_path = os.path.join(mount_dir, "hinashah_organized/Data/Images_Stacks", test_df.loc[idx]["image"].replace("hinashah/","").replace(".jpg", ".nrrd")).replace(os.sep,"/")        
-        img_np = sitk.GetArrayFromImage(sitk.ReadImage(img_path)).astype(np.ubyte)        
+        # img_path = os.path.join(mount_dir, "hinashah_organized/Data/Images_Stacks", test_df.loc[idx]["image"].replace("hinashah/","").replace(".jpg", ".nrrd")).replace(os.sep,"/")        
+        # img_np = sitk.GetArrayFromImage(sitk.ReadImage(img_path)).astype(np.ubyte)        
         
-        t, xs, ys, _ = img_np.shape
-        xo = (xs - 448)//2
-        yo = (ys - 448)//2
-        img_np = img_np[:,xo:xo + 448, yo:yo + 448,:]
+        # t, xs, ys, _ = img_np.shape
+        # xo = (xs - 448)//2
+        # yo = (ys - 448)//2
+        # img_np = img_np[:,xo:xo + 448, yo:yo + 448,:]
 
-        fig_frames = px.imshow(img_np[frame_id], binary_string=True, binary_compression_level=5)
+        # fig_frames = px.imshow(img_np[frame_id], binary_string=True, binary_compression_level=5)
 
-        img_path_explain = os.path.join(mount_dir, "hinashah/Analysis_Set_202208/cam/hinashah_organized/Data/Images_Stacks", test_df.loc[idx]["image"].replace("hinashah/","").replace(".jpg", ".nrrd")).replace(os.sep, "/")
+        # img_path_explain = os.path.join(mount_dir, "hinashah/Analysis_Set_202208/cam/hinashah_organized/Data/Images_Stacks", test_df.loc[idx]["image"].replace("hinashah/","").replace(".jpg", ".nrrd")).replace(os.sep, "/")
         
-        if os.path.exists(img_path_explain):
-            img_explain_np = sitk.GetArrayFromImage(sitk.ReadImage(img_path_explain))
-            fig_frames.add_trace(go.Heatmap(z=img_explain_np[frame_id,:,:], zmin=0, zmax=1, opacity=opacity, colorscale='jet'))
+        # if os.path.exists(img_path_explain):
+        #     img_explain_np = sitk.GetArrayFromImage(sitk.ReadImage(img_path_explain))
+        #     fig_frames.add_trace(go.Heatmap(z=img_explain_np[frame_id,:,:], zmin=0, zmax=1, opacity=opacity, colorscale='jet'))
         
-        return fig_frames
+        return go.Figure()
     else: 
         return go.Figure()
 
@@ -264,8 +275,8 @@ def conf_matrix(fig):
     
     fig = px.imshow(cnf_matrix_norm_stacks,
         labels=dict(x="Predicted", y="True"),
-        x=['Healthy', 'TT'],
-        y=['Healthy', 'TT'],
+        x=['Healthy', 'BAD'],
+        y=['Healthy', 'BAD'],
         color_continuous_scale='blues',
         text_auto='.2f'
         )
@@ -314,6 +325,7 @@ app.layout = html.Div(children=[
                 className='six columns'
                 )
         ], className='row'),
+        # This is not used for now --> patches
         html.Div([            
             html.Div(
                 [dcc.Graph(id='study-level')],
@@ -325,6 +337,7 @@ app.layout = html.Div(children=[
                 className='six columns'
                 )
         ], className='row'),
+        # confusion matrix + results
         html.Div([            
             html.Div(
                 [dcc.Graph(id='conf-matrix')],

@@ -52,13 +52,6 @@ class SegImageLoggerNeptune(Callback):
             trainer.logger.experiment["images/seg"].upload(fig)
             plt.close()
 
-            with torch.no_grad():
-                x_hat = pl_module(img1)
-                grid_img3 = torchvision.utils.make_grid(x_hat/torch.max(x_hat))
-                fig = plt.figure(figsize=(7, 9))
-                ax = plt.imshow(grid_img3.permute(1, 2, 0).cpu().numpy())
-                trainer.logger.experiment["images/x_hat"].upload(fig)
-                plt.close()
 
 
 class MaskRCNNImageLoggerNeptune(Callback):

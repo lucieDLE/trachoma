@@ -165,7 +165,7 @@ def main(args):
     df_train = df_train.loc[~df_train[args.label_column].isin(['Reject'])].reset_index()
 
     ttdata = TTDataModuleBX(df_train, df_val, df_test, batch_size=1,img_column='filename', mount_point=mount_point, 
-                            train_transform=BBXImageTrainTransform(), valid_transform=BBXImageEvalTransform(), test_transform=BBXImageTestTransform())
+                            train_transform=BBXImageTrainTransform(), valid_transform=BBXImageEvalTransform(), test_transform=BBXImageTestTransform(666,1333))
 
 
     ttdata.setup()

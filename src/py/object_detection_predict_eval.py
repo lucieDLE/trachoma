@@ -123,38 +123,64 @@ mnt_ckpt = '/CMF/data/lumargot/trachoma/output/backtoold'
 
 all_checkpoints = [
 
-'5fold_weights/fold0/epoch=7-val_loss=0.900.ckpt', 
-'5fold_weights/fold0/epoch=8-val_loss=0.893.ckpt', 
-'5fold_weights/fold0/last.ckpt',
 
-'5fold_weights/fold1/epoch=4-val_loss=0.906.ckpt', 
-'5fold_weights/fold1/epoch=5-val_loss=0.894.ckpt', 
-'5fold_weights/fold1/last.ckpt', 
 
-'5fold_weights/fold2/epoch=3-val_loss=0.950.ckpt', 
-'5fold_weights/fold2/epoch=4-val_loss=0.939.ckpt', 
-'5fold_weights/fold2/last.ckpt', 
+'5fold_v6/fold0/epoch=10-val_loss=0.508.ckpt', 
+'5fold_v6/fold0/epoch=6-val_loss=0.512.ckpt', 
+'5fold_v6/fold0/last-v1.ckpt',
 
-'5fold_weights/fold3/epoch=11-val_loss=0.949.ckpt', 
-'5fold_weights/fold3/epoch=3-val_loss=0.934.ckpt', 
-'5fold_weights/fold3/last.ckpt', 
+'5fold_v6/fold1/epoch=10-val_loss=0.499.ckpt', 
+'5fold_v6/fold1/epoch=14-val_loss=0.495.ckpt', 
+'5fold_v6/fold1/last-v1.ckpt', 
 
-'5fold_weights/fold4/epoch=4-val_loss=0.933.ckpt', 
-'5fold_weights/fold4/epoch=5-val_loss=0.941.ckpt', 
-'5fold_weights/fold4/last.ckpt', 
+'5fold_v6/fold2/epoch=12-val_loss=0.610.ckpt', 
+'5fold_v6/fold2/epoch=5-val_loss=0.606.ckpt', 
+'5fold_v6/fold2/last-v1.ckpt', 
+
+'5fold_v6/fold3/epoch=11-val_loss=0.632.ckpt', 
+'5fold_v6/fold3/epoch=13-val_loss=0.636.ckpt', 
+'5fold_v6/fold3/last-v1.ckpt', 
+
+'5fold_v6/fold4/epoch=8-val_loss=0.525.ckpt', 
+'5fold_v6/fold4/epoch=9-val_loss=0.515.ckpt', 
+'5fold_v6/fold4/last-v1.ckpt', 
+
+
+'5fold_df/fold0/epoch=11-val_loss=1.053.ckpt',
+'5fold_df/fold0/epoch=6-val_loss=1.059.ckpt',
+'5fold_df/fold0/last.ckpt',
+
+
+'5fold_df/fold1/epoch=14-val_loss=0.909.ckpt',
+'5fold_df/fold1/epoch=9-val_loss=0.902.ckpt',
+'5fold_df/fold1/last.ckpt',
+
+'5fold_df/fold2/epoch=11-val_loss=0.969.ckpt',
+'5fold_df/fold2/epoch=8-val_loss=0.976.ckpt',
+'5fold_df/fold2/last.ckpt',
+
+'5fold_df/fold3/epoch=9-val_loss=0.922.ckpt',
+'5fold_df/fold3/epoch=9-val_loss=0.935.ckpt',
+'5fold_df/fold3/last.ckpt',
+
+
+'5fold_df/fold4/epoch=7-val_loss=0.959.ckpt',
+'5fold_df/fold4/epoch=8-val_loss=0.984.ckpt',
+'5fold_df/fold4/last.ckpt',
 
 ]
 
+out_dir = '/CMF/data/lumargot/trachoma/output/backtoold/5fold_v6/test/fold2'
 
 
 # === old === #
 mount_point = "/CMF/data/lumargot/trachoma/"
 
-df_train = pd.read_csv('/CMF/data/lumargot/trachoma/csv_updated/mtss_pret_combined_train_fold0_train_train.csv')
-df_val = pd.read_csv('/CMF/data/lumargot/trachoma/csv_updated/mtss_pret_combined_train_fold0_train_test.csv')
-df_test = pd.read_csv('/CMF/data/lumargot/trachoma/csv_updated/mtss_pret_combined_train_fold0_test.csv')
+df_train = pd.read_csv('/CMF/data/lumargot/trachoma/csv_updated/mtss_pret_combined_train_fold2_train_train.csv')
+df_val = pd.read_csv('/CMF/data/lumargot/trachoma/csv_updated/mtss_pret_combined_train_fold2_train_test.csv')
+df_test = pd.read_csv('/CMF/data/lumargot/trachoma/csv_updated/mtss_pret_combined_train_fold2_test.csv')
 
-df_test = pd.read_csv('/CMF/data/lumargot/trachoma/csv_updated/mtss_pret_combined_test.csv')
+# df_test = pd.read_csv('/CMF/data/lumargot/trachoma/csv_updated/mtss_pret_combined_test.csv')
 df_test = df_test.drop_duplicates(subset=['x_patch', 'y_patch', 'filename'])
 
 concat_labels=['overcorrection', 'ECA', 'Gap', 'Fleshy']
@@ -167,12 +193,11 @@ label_column = 'label'
 map ={ 1:'Healthy', 2:'Entropion', 3:'Overcorrection'}
 
 
-
 df_test = remove_labels(df_test, class_column, label_column, drop_labels=drop_labels, concat_labels=concat_labels)
 df_train = remove_labels(df_train, class_column, label_column, drop_labels=drop_labels, concat_labels=concat_labels)
 df_val = remove_labels(df_val, class_column, label_column, drop_labels=drop_labels, concat_labels=concat_labels)
 
-# df_test = df_test.loc[df_test['dataset'] == 'PoPP_Data']
+df_test = df_test.loc[df_test['dataset'] == 'PoPP_Data']
 
 ttdata = TTDataModuleBX(df_train, df_val, df_test, batch_size=1, num_workers=1, img_column='filename',severity_column='sev', 
                         mount_point=mount_point, class_column= class_column,
@@ -189,17 +214,6 @@ for ckpt_name in all_checkpoints:
     model.eval()
     model.cuda()
 
-    # model = FasterTTRCNN(out_features=4, class_weights = torch.ones(4))
-    # state_dict = torch.load(ckpt, weights_only=False, map_location='cuda') # or 'cuda' if loading to GPU
-    # model.load_state_dict(state_dict['state_dict'])
-    # model.eval()
-
-
-    # rpn = TTRPN(model.model)
-    # rpn.eval
-
-    # roi_head = TTRoidHead(model.model)
-    # roi_head.eval()
 
     num_preds,num_fps,num_fns = 0, 0, 0
     l_ious, l_distances = [], []
@@ -217,27 +231,17 @@ for ckpt_name in all_checkpoints:
         outs = model(imgs, mode='test')
         out_img = outs[0]
 
-
-        # proposals = rpn(imgs)
-        # out = roi_head(imgs, proposals)
-        # out_dict = [{'boxes':torch.tensor(out[0]), 'labels':torch.tensor(out[1]),  'scores':torch.tensor(out[2])}]
-
-        # out_dict = [{'boxes':torch.tensor(boxes_tf)[:, [0,2,1,3]], 'labels':torch.tensor(labels_tf),  'scores':torch.tensor(scores_tf)}]
-        # out_dict = roi_head.faster.transform.postprocess(out_dict, roi_head.images_shapes, roi_head.og_sizes)
-        # out_img = out_dict[0]
-
-
         # remove overlapping boxes with iou > 0.7  
         ### -- gt -- ###
-        gt_indices = nms(targets['boxes'][0], torch.ones_like(targets['boxes'][0,:,0]), iou_threshold=1.0) ## iou as args
+        gt_indices = nms(targets['boxes'][0], torch.ones_like(targets['boxes'][0,:,0]), iou_threshold=0.9) ## iou as args
         filename = ds.data.df_subject.iloc[idx]['filename']
         targets['boxes'] = targets['boxes'][0,gt_indices].cpu().detach()
         targets['labels'] = targets['labels'][0,gt_indices].cpu().detach()  
 
         ### -- preds -- ###
-        eyelid_seg = select_eyelid_seg(targets['mask'][0])
-        preds = filter_indices_on_segmentation_mask(eyelid_seg, out_img, overlap_threshold=0.5)
-        preds = process_predictions(preds)
+        # eyelid_seg = select_eyelid_seg(targets['mask'][0])
+        # preds = filter_indices_on_segmentation_mask(eyelid_seg, out_img, overlap_threshold=0.5)
+        preds = process_predictions(out_img)
 
 
         ## box-level evaluation
@@ -259,25 +263,35 @@ for ckpt_name in all_checkpoints:
     pred = np.concatenate(pred)
     gt = np.concatenate(gt)
 
+    total_detections = num_preds + num_fns + num_fps
+    detect_stats = {'Matched Prediction': num_preds,
+                    'Ratio match prediction': 100*num_preds/total_detections, 
+                    'False Positives':num_fps,
+                    'Ratio FP': 100*num_fps/total_detections, 
+                    'False Negatives':num_fns,
+                    'Ration FN': 100*num_fns/total_detections, 
+                    'Mean IoU': ious.mean().item(),
+                    }
+
+    name = os.path.splitext(ckpt)[0]
+
+    json_file = os.path.join(out_dir, name +  '_mtss_box_detect_report.json')
+    with open(json_file, "w") as f:
+        json.dump(detect_stats, f, indent=2) # indent for pretty printing
 
 
     df_pret = pd.DataFrame(data={'gt':gt, 'pred':pred})
-    name = os.path.splitext(ckpt)[0]
-    print(name + '_box-level_prediction_mtss.csv')
-    df_pret.to_csv(name + '_box-level_prediction.csv')
+    df_pret.to_csv(os.path.join(out_dir, name + '_mtss_box-level_prediction.csv'))
 
-    print(classification_report(df_pret['gt'], df_pret['pred']))
     report = classification_report(df_pret['gt'], df_pret['pred'], output_dict=True)
     df_report = pd.DataFrame(report).transpose()
-    df_report.to_csv(name + '_box-level_report.csv')
+    df_report.to_csv(os.path.join(out_dir, name +  '_mtss_box-level_report.csv'))
 
-
-    class_names = ['Healthy', 'Entropion', 'Overcorrection']
 
     fig = plt.figure(figsize=(16,6))
     plt.subplot(121)
     cnf_matrix = confusion_matrix(df_pret['gt'], df_pret['pred'])
-    plot_confusion_matrix(cnf_matrix, classes=class_names, title='confusion matrix')
+    plot_confusion_matrix(cnf_matrix, classes=['Healthy', 'Undercorrection', 'Overcorrection'], title='confusion matrix')
     plt.subplot(122)
-    cm = plot_confusion_matrix(cnf_matrix, classes=class_names, normalize=True, title='confusion matrix - normalized')
-    plt.savefig(name + '_box-level_cm.png',dpi=200)
+    cm = plot_confusion_matrix(cnf_matrix, classes=['Healthy', 'Undercorrection', 'Overcorrection'], normalize=True, title='confusion matrix - normalized')
+    plt.savefig(os.path.join(out_dir, name + '_mtss_box-level_cm.png'),dpi=200)
