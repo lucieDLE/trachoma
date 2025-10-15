@@ -204,8 +204,6 @@ def get_outcome_from_list(list_name):
         elif counts[2] > 2:
           outcome = 2
 
-      print(unique_outcomes, counts, " -- >", outcome)
-
     elif len(unique_outcomes) == 2:
       if 0 in unique_outcomes:
         if counts[1] > 2: outcome = max(list_name)
@@ -213,8 +211,6 @@ def get_outcome_from_list(list_name):
 
       else: 
         outcome =unique_outcomes[idx]
-      print(unique_outcomes, counts, " -- >", outcome)
-
     elif len(unique_outcomes) == 1:
         outcome = list_name[0]
     else:
@@ -225,9 +221,9 @@ def get_outcome_from_list(list_name):
   
   return outcome
 
-def get_outcome_per_section(x, labels, portion_side):
+def get_outcome_per_section(x, labels, portion_side, num_sections=4):
   max_l = portion_side
-  max_middle = 2*portion_side
+  max_middle = (num_sections - 1) * portion_side
   
   l_left, l_middle, l_right = [], [], []
 
