@@ -43,16 +43,37 @@ def main(args):
         monitor='val_loss'
     )
 
-    # image_logger = SegImageLoggerNeptune(num_images=6, log_steps=args.log_every_n_steps)
-    image_logger = MaskRCNNImageLoggerNeptune(log_steps = args.log_every_n_steps)
+    image_logger = SegImageLoggerNeptune(num_images=6, log_steps=args.log_every_n_steps)
+    # image_logger = MaskRCNNImageLoggerNeptune(log_steps = args.log_every_n_steps)
     
     if args.model:
-        # model = TTUNet.load_from_checkpoint(args.model, out_channels=4, **vars(args), strict=False)
-        model = TTRCNN.load_from_checkpoint(args.model, out_channels=4, **vars(args), strict=False)
+        model = TTUNet.load_from_checkpoint(args.model, out_channels=2, **vars(args), strict=False)
+        # model = TTRCNN.load_from_checkpoint(args.model, out_channels=4, **vars(args), strict=False)
     else:
-        # model = TTUNet(out_channels=4, **vars(args))
-        model = TTRCNN(num_classes=4,  **vars(args))
+        model = TTUNet(out_channels=2, **vars(args))
+        # model = TTRCNN(num_classes=4,  **vars(args))
     
+
+    ckpt = '/CMF/data/lumargot/trachoma/output/segmentation/first_model/epoch.192-val_loss.0.52.ckpt'
+    checkpoint = torch.load(ckpt, map_location="cpu")
+
+    state_dict = checkpoint["state_dict"] if "state_dict" in checkpoint else checkpoint
+    model_dict = model.state_dict()
+
+    pretrained_dict = {
+        k: v for k, v in state_dict.items()
+        if k in model_dict and v.shape == model_dict[k].shape
+    }
+
+    print(f"Loaded {len(pretrained_dict)} / {len(model_dict)} layers")
+
+    # Update and load
+    model_dict.update(pretrained_dict)
+    model.load_state_dict(model_dict)
+
+
+    
+
     early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.00, patience=args.patience, verbose=True, mode="min")
     logger = None
     if args.tb_dir:

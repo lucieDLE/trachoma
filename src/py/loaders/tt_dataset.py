@@ -67,11 +67,12 @@ class TTDatasetSeg(Dataset):
         else:
             return self.__getitem__(random.randint(0, len(self) - 1))
         # # ### preprocess image
-        bbx_eye = self.compute_eye_bbx(seg_t, pad=0.01)
-        img_t = img_t[bbx_eye[1]:bbx_eye[3],bbx_eye[0]:bbx_eye[2]]
-        seg_t = seg_t[bbx_eye[1]:bbx_eye[3],bbx_eye[0]:bbx_eye[2]]
+        # bbx_eye = self.compute_eye_bbx(seg_t, pad=0.01)
+        # img_t = img_t[bbx_eye[1]:bbx_eye[3],bbx_eye[0]:bbx_eye[2]]
+        # seg_t = seg_t[bbx_eye[1]:bbx_eye[3],bbx_eye[0]:bbx_eye[2]]
 
-        d = {"img": img_t, "seg": seg_t, 'class':torch.tensor(row['class']).to(torch.long) }
+        d = {"img": img_t, "seg": seg_t}
+        # d = {"img": img_t, "seg": seg_t, 'class':torch.tensor(row['class']).to(torch.long) }
         
         return d
     def compute_eye_bbx(self, seg, label=1, pad=0):
@@ -110,7 +111,8 @@ class TTDatasetBX(Dataset):
         
         subject = self.df_subject.iloc[idx][self.img_column]
         img_path = os.path.join(self.mount_point, subject)
-        self.seg_path = img_path.replace('img', 'seg').replace('.jpg', '.nrrd')
+        # self.seg_path = img_path.replace('img', 'segmentation_cleaned').replace('.jpg', '.nrrd')
+        self.seg_path = img_path.replace('img', 'seg_eyelid').replace('.jpg', '.nrrd')
 
         df_patches = self.df.loc[ self.df[self.img_column] == subject]
         if not os.path.exists(self.seg_path):
@@ -125,7 +127,7 @@ class TTDatasetBX(Dataset):
         bbx_eye = self.compute_eye_bbx(seg, pad=0.05)
         img_cropped = img[:,bbx_eye[1]:bbx_eye[3],bbx_eye[0]:bbx_eye[2] ]
         seg_cropped = seg[bbx_eye[1]:bbx_eye[3],bbx_eye[0]:bbx_eye[2] ]
-        seg_cropped[ seg_cropped!=3 ] =0
+        # seg_cropped[ seg_cropped!=3 ] =0
         h,w = seg_cropped.shape
         
         self.pad = int(img_cropped.shape[1]/10)
@@ -436,10 +438,16 @@ class TTDataModuleSeg(pl.LightningDataModule):
         self.test_ds = monai.data.Dataset(TTDatasetSeg(self.df_test, mount_point=self.mount_point, img_column=self.img_column, seg_column=self.seg_column, class_column=self.class_column), transform=self.test_transform)
 
     def train_dataloader(self):
-        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=self.drop_last, collate_fn=classification_collate_fn, shuffle=True)
+        return DataLoader(self.train_ds, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=self.drop_last, 
+                                                                    # collate_fn=classification_collate_fn,
+                                                                    collate_fn=pad_list_data_collate,
+                                                                    shuffle=True)
 
     def val_dataloader(self):
-        return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=self.drop_last, collate_fn=classification_collate_fn)
+        return DataLoader(self.val_ds, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=self.drop_last, 
+                                                                    # collate_fn=classification_collate_fn,
+                                                                    collate_fn=pad_list_data_collate,
+                                                                    )
 
     def test_dataloader(self):
         return DataLoader(self.test_ds, batch_size=self.batch_size, num_workers=self.num_workers, drop_last=self.drop_last)
@@ -875,9 +883,9 @@ class TrainTransformsSeg:
             [
                 EnsureChannelFirstd(strict_check=False, keys=["img"], channel_dim=2),
                 EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
-                # LabelMapCrop(img_key="img", seg_key="seg", prob=0.5),
-                # RandZoomd(keys= ["img", "seg"], prob=0.4, min_zoom=0.2, max_zoom=1.5, mode=["area", "nearest"], padding_mode='constant'),
-                Resized(keys=["img", "seg"], spatial_size=[768, 1536], mode=['area', 'nearest']),
+                LabelMapCrop(img_key="img", seg_key="seg", prob=0.5),
+                RandZoomd(keys= ["img", "seg"], prob=0.4, min_zoom=0.2, max_zoom=1.5, mode=["area", "nearest"], padding_mode='constant'),
+                Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
                 RandFlipd(keys=["img", "seg"], prob=0.2, spatial_axis=1),
                 RandRotated(keys=["img", "seg"], prob=0.2, range_x=math.pi/2.0, range_y=math.pi/2.0, mode=["bilinear", "nearest"], padding_mode='zeros'),
                 ScaleIntensityd(keys=["img"]),                
@@ -896,10 +904,11 @@ class TrainTransformsFullSeg:
             [
                 EnsureChannelFirstd(strict_check=False, keys=["img"], channel_dim=2),
                 EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
-                SquarePad(keys=["img", "seg"]),
+                # SquarePad(keys=["img", "seg"]),
                 RandomLabelMapCrop(img_key="img", seg_key="seg", prob=0.5, pad=0.15),
                 ScaleIntensityd(keys=["img"]),
-                RandomIntensity(keys=["img"]),
+                # RandomIntensity(keys=["img"]),
+                Lambdad(keys=['img'], func=lambda x: color_jitter(x)),
                 ToTensord(keys=["img", "seg"])
             ]
         )
@@ -912,7 +921,7 @@ class EvalTransformsFullSeg:
             [
                 EnsureChannelFirstd(strict_check=False, keys=["img"], channel_dim=2),
                 EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),
-                SquarePad(keys=["img", "seg"]),
+                # SquarePad(keys=["img", "seg"]),
                 ScaleIntensityd(keys=["img"]),
                 ToTensord(keys=["img", "seg"])
             ]
@@ -926,7 +935,7 @@ class EvalTransformsSeg:
             [
                 EnsureChannelFirstd(strict_check=False, keys=["img"], channel_dim=2),
                 EnsureChannelFirstd(strict_check=False, keys=["seg"], channel_dim='no_channel'),       
-                Resized(keys=["img", "seg"], spatial_size=[768, 1536], mode=['area', 'nearest']),
+                Resized(keys=["img", "seg"], spatial_size=[512, 512], mode=['area', 'nearest']),
                 ScaleIntensityd(keys=["img"])                
             ]
         )

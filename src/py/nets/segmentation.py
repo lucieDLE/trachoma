@@ -166,7 +166,7 @@ class TTUNet(pl.LightningModule):
 
         self.model = monai.networks.nets.UNet(spatial_dims=2, in_channels=3, out_channels=self.hparams.out_channels, channels=(16, 32, 64, 128, 256, 512, 1024), strides=(2, 2, 2, 2, 2, 2), num_res_units=4)
 
-        self.metric = DiceMetric(include_background=True, reduction="mean")   
+        # self.metric = DiceMetric(include_background=True, reduction="mean")   
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)

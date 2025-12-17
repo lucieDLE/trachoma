@@ -93,10 +93,10 @@ def main(args):
 
     device = torch.device("cuda:0")
 
-    if args.seg_nn == 'TTUNet':
-        model_seg = TTUNet.load_from_checkpoint(args.seg_model, strict=False)
-    elif args.seg_nn == 'TTRCNN':
-        model_seg = TTRCNN.load_from_checkpoint(args.seg_model, strict=False)
+    # if args.seg_nn == 'TTUNet':
+    model_seg = TTUNet.load_from_checkpoint(args.seg_model, strict=False)
+    # elif args.seg_nn == 'TTRCNN':
+    #     model_seg = TTRCNN.load_from_checkpoint(args.seg_model, strict=False)
 
     model_seg.cuda()
     model_seg.eval()
